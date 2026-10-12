@@ -1,27 +1,28 @@
 profile /home/user/prof/stock/drift10000.cpuprofile
-tick-loop samples: 30124 ms
+tick-loop samples: 30511 ms
 
 == by category (self time)
- 58.4%  embind-js
- 13.9%  vecs
-  9.6%  vecs-physics
-  5.9%  embind-wasm
-  5.4%  box2d
-  5.0%  wasm-alloc
+ 57.6%  embind-js
+ 13.8%  vecs
+  9.5%  vecs-physics
+  5.8%  embind-wasm
+  5.3%  box2d
+  4.9%  wasm-alloc
   1.8%  engine
+  1.2%  gc
   0.0%  bench
 
 == by system x category
- 90.3%  PhysicsPoseSyncOut
-     58.3%  embind-js
-      9.6%  vecs-physics
-      8.2%  vecs
-      5.8%  embind-wasm
-      5.0%  wasm-alloc
-      1.8%  engine
-      1.7%  box2d
-  5.9%  other
-      5.8%  vecs
+ 89.1%  PhysicsPoseSyncOut
+     57.6%  embind-js
+      9.5%  vecs-physics
+      8.1%  vecs
+      5.7%  embind-wasm
+      4.9%  wasm-alloc
+      1.7%  engine
+      1.6%  box2d
+  5.8%  other
+      5.7%  vecs
       0.1%  embind-wasm
       0.0%  vecs-physics
       0.0%  bench
@@ -33,34 +34,39 @@ tick-loop samples: 30124 ms
       0.0%  embind-wasm
       0.0%  vecs-physics
       0.0%  wasm-alloc
+  1.2%  (garbage collector)
+      1.2%  gc
   0.1%  PhysicsEvents
       0.0%  embind-js
       0.0%  vecs-physics
       0.0%  embind-wasm
       0.0%  engine
       0.0%  wasm-alloc
+  0.1%  (program)
+      0.1%  engine
 
 == top 30 functions (self time)
- 41.8%  embind-js  makeClassHandle  deluxe/Box2D.deluxe.mjs:1956
-  6.4%  vecs  get  lib/vecs/dist/entity/entity.components.js:163
+ 41.3%  embind-js  makeClassHandle  deluxe/Box2D.deluxe.mjs:1956
+  6.3%  vecs  get  lib/vecs/dist/entity/entity.components.js:163
   6.2%  vecs-physics  writePose  lib/vecs-physics/dist/body/pose_out.js:77
-  5.7%  embind-js  get  deluxe/Box2D.deluxe.mjs:2493
-  4.3%  embind-js  RegisteredPointer_fromWireType  deluxe/Box2D.deluxe.mjs:1976
-  3.5%  vecs  _executeCommand  lib/vecs/dist/world/world.deferred.js:59
+  5.6%  embind-js  get  deluxe/Box2D.deluxe.mjs:2493
+  4.2%  embind-js  RegisteredPointer_fromWireType  deluxe/Box2D.deluxe.mjs:1976
+  3.4%  vecs  _executeCommand  lib/vecs/dist/world/world.deferred.js:59
   3.3%  vecs-physics  (anon)  lib/vecs-physics/dist/body/pose_out.js:13
   2.7%  embind-js  toWireType  deluxe/Box2D.deluxe.mjs:1429
   2.1%  embind-js  validateThis  deluxe/Box2D.deluxe.mjs:2457
   1.9%  wasm-alloc  pthread_mutex_lock  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
-  1.8%  engine  (anon)  :3
+  1.7%  engine  (anon)  :3
   1.3%  vecs  getEntity  lib/vecs/dist/world/world.entities.js:47
-  1.3%  wasm-alloc  emscripten_builtin_malloc  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  1.2%  wasm-alloc  emscripten_builtin_malloc  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  1.2%  gc  (garbage collector)  :0
   1.1%  embind-js  fromWireType  deluxe/Box2D.deluxe.mjs:1421
   0.9%  wasm-alloc  pthread_mutex_unlock  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.9%  box2d  b2FinalizeBodiesTask  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.8%  box2d  b2ExecuteBlock  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.8%  vecs  _routeModified  lib/vecs/dist/entity/entity.queries.js:48
   0.8%  vecs  _set  lib/vecs/dist/entity/entity.components.js:92
-  0.8%  box2d  b2DynamicTree_Query  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.7%  box2d  b2DynamicTree_Query  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.7%  box2d  b2Body_GetLinearVelocity  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.6%  box2d  b2Atan2  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.5%  embind-wasm  js-to-wasm:ii:i  :0
@@ -70,4 +76,3 @@ tick-loop samples: 30124 ms
   0.4%  embind-wasm  void emscripten::internal::MemberAccess<b2BodyId, unsigned short>::setWire<b2BodyId>(unsigned short b2BodyId::* const&, b2BodyId&, unsigned short)  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.4%  box2d  b2Body_GetAngularVelocity  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
   0.4%  box2d  b2DynamicTree_EnlargeProxy  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
-  0.4%  embind-wasm  emscripten::internal::FunctionInvoker<emscripten::internal::rvp::default_tag, float (*)(b2Rot const&), float, b2Rot const&>::invoke(float (**)(b2Rot const&), b2Rot*)  wasm://wasm/Box2D.deluxe.wasm-0020153e:1

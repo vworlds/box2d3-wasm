@@ -82,11 +82,33 @@ const totals = new Map();
 const bySystem = new Map();
 const byFunction = new Map();
 let tickUs = 0;
+// GC and (program) samples hang off the root, outside any JS stack, so they never pass through
+// progressAll. Count the ones that fall inside the tick loop's time window (first to last
+// tick-loop sample): after setup, the loop is all the process does.
+let firstTick = -1;
+let lastTick = -1;
+for (let i = 0; i < profile.samples.length; i++) {
+  if (nodeInfo(profile.samples[i]).inTick) {
+    if (firstTick < 0) firstTick = i;
+    lastTick = i;
+  }
+}
+const ROOT_LEVEL = new Set(["(garbage collector)", "(program)"]);
 for (let i = 0; i < profile.samples.length; i++) {
   const id = profile.samples[i];
   const dt = dts[i] ?? 0;
   const ni = nodeInfo(id);
-  if (!ni.inTick) continue;
+  if (!ni.inTick) {
+    const fn = byId.get(id).callFrame.functionName;
+    if (i > firstTick && i < lastTick && ROOT_LEVEL.has(fn)) {
+      const category = fn === "(garbage collector)" ? "gc" : "engine";
+      tickUs += dt;
+      add(totals, category, dt);
+      add(bySystem, `${fn}\t${category}`, dt);
+      add(byFunction, `${category}\t${fn}\t:0`, dt);
+    }
+    continue;
+  }
   tickUs += dt;
   add(totals, ni.category, dt);
   add(bySystem, `${ni.system}\t${ni.category}`, dt);

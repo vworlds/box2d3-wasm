@@ -1,0 +1,6 @@
+r0 rest2000     stock      tick 11166.5 pose 10953 step 155.1 alloc 6611797 17fc310b
+r0 drive500     stock      tick 12346.7 pose 9328.1 step 648.1 alloc 2438326 7ef0263f
+
+scene        variant     metric   median     min       max     spread  checksums
+rest2000     stock      allocBytesPerStep 6611797.0 6611797.0 6611797.0    0.0%  17fc310b
+drive500     stock      allocBytesPerStep 2438326.0 2438326.0 2438326.0    0.0%  7ef0263f

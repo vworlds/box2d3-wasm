@@ -1,0 +1,50 @@
+r0 rest2000     npm        tick 6552.5 pose 6372.2 step 136.6 alloc -1 17fc310b
+r0 rest2000     src        tick 6515.4 pose 6336.9 step 136 alloc -1 17fc310b
+r0 drive500     npm        tick 8799 pose 6755.3 step 542.6 alloc -1 fd7cc876
+r0 drive500     src        tick 9079.3 pose 6922.3 step 565.2 alloc -1 fd7cc876
+r0 drift2000    npm        tick 8781.3 pose 8470.8 step 255.4 alloc -1 a66a94ee
+r0 drift2000    src        tick 8222.2 pose 7923.6 step 247.7 alloc -1 a66a94ee
+r1 drive500     src        tick 10046.1 pose 7721.5 step 597 alloc -1 fd7cc876
+r1 drive500     npm        tick 9916.5 pose 7497 step 634.6 alloc -1 fd7cc876
+r1 drift2000    src        tick 8628.4 pose 8324.8 step 252.9 alloc -1 a66a94ee
+r1 drift2000    npm        tick 8724.8 pose 8419.3 step 252.3 alloc -1 a66a94ee
+r1 rest2000     src        tick 6696 pose 6511 step 141.6 alloc -1 17fc310b
+r1 rest2000     npm        tick 6680.5 pose 6497.8 step 141.6 alloc -1 17fc310b
+r2 drift2000    npm        tick 8689.7 pose 8379.4 step 258.8 alloc -1 a66a94ee
+r2 drift2000    src        tick 8630.7 pose 8317.8 step 259.4 alloc -1 a66a94ee
+r2 rest2000     npm        tick 6861.9 pose 6683.5 step 139.3 alloc -1 17fc310b
+r2 rest2000     src        tick 6881.1 pose 6690.4 step 146.5 alloc -1 17fc310b
+r2 drive500     npm        tick 9157.1 pose 6972.7 step 576.1 alloc -1 fd7cc876
+r2 drive500     src        tick 9323.2 pose 7091.7 step 587.6 alloc -1 fd7cc876
+
+scene        variant     metric   median     min       max     spread  checksums
+rest2000     npm        tickNs     6680.5    6552.5    6861.9    4.7%  17fc310b
+rest2000     npm        poseNs     6497.8    6372.2    6683.5    4.9%  
+rest2000     npm        stepNs      139.3     136.6     141.6    3.7%  
+rest2000     npm        eventsNs     18.5      17.8      18.8    5.6%  
+rest2000     npm        otherNs      21.2      19.7      24.4   23.9%  
+rest2000     src        tickNs     6696.0    6515.4    6881.1    5.6%  17fc310b
+rest2000     src        poseNs     6511.0    6336.9    6690.4    5.6%  
+rest2000     src        stepNs      141.6     136.0     146.5    7.7%  
+rest2000     src        eventsNs     20.4      17.4      20.7   19.0%  
+rest2000     src        otherNs      22.4      22.2      24.0    8.1%  
+drive500     npm        tickNs     9157.1    8799.0    9916.5   12.7%  fd7cc876
+drive500     npm        poseNs     6972.7    6755.3    7497.0   11.0%  
+drive500     npm        stepNs      576.1     542.6     634.6   17.0%  
+drive500     npm        eventsNs     57.6      45.0      63.6   41.3%  
+drive500     npm        otherNs      64.8      49.9      72.2   44.7%  
+drive500     src        tickNs     9323.2    9079.3   10046.1   10.6%  fd7cc876
+drive500     src        poseNs     7091.7    6922.3    7721.5   11.5%  
+drive500     src        stepNs      587.6     565.2     597.0    5.6%  
+drive500     src        eventsNs     56.6      50.9      61.9   21.6%  
+drive500     src        otherNs      68.8      65.2      69.8    7.1%  
+drift2000    npm        tickNs     8724.8    8689.7    8781.3    1.1%  a66a94ee
+drift2000    npm        poseNs     8419.3    8379.4    8470.8    1.1%  
+drift2000    npm        stepNs      255.4     252.3     258.8    2.6%  
+drift2000    npm        eventsNs     27.8      26.0      30.0   15.4%  
+drift2000    npm        otherNs      24.1      22.5      26.2   16.4%  
+drift2000    src        tickNs     8628.4    8222.2    8630.7    5.0%  a66a94ee
+drift2000    src        poseNs     8317.8    7923.6    8324.8    5.1%  
+drift2000    src        stepNs      252.9     247.7     259.4    4.7%  
+drift2000    src        eventsNs     26.7      26.4      28.8    9.1%  
+drift2000    src        otherNs      23.5      22.9      23.8    3.9%  

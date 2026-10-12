@@ -10,6 +10,14 @@
 //   contact                           a gravity pile in a box: 1,000 dynamic circles and boxes,
 //                                     contact, hit and sensor events enabled on a subset
 //   worlds25x19                       25 independent worlds of 19 drifting bodies (Space Rocks)
+//   rest2000                          2,000 awake bodies at rest (sleep disabled): every body is in
+//                                     the move events every step but nothing changes, so the tick
+//                                     is the pure read path (no component writes)
+//   drive500                          500 drifting bodies, each pushed by a constant Force and
+//                                     Torque every step (per-step force crossings, 4 writes/body)
+//
+// BENCH_TRACE=1 folds every body's pose and velocities into the checksum after every measured step
+// (a per-step trace, for build-flag variants), instead of only at the end.
 //
 // Prints one `TICK_RESULT {json}` line. Timings are ns per body per step; `allocBytesPerStep` is
 // the JS heap growth per step over a GC-free window, i.e. bytes allocated per step.
@@ -25,6 +33,7 @@ import {
   Circle,
   ContactEvents,
   Detectable,
+  Force,
   HitEvents,
   LinearVelocity,
   PhysicsModule,
@@ -33,6 +42,7 @@ import {
   Rotation,
   Sensor,
   SensorEvents,
+  Torque,
 } from "@vworlds/vecs-physics";
 
 type Scene = {
@@ -52,7 +62,10 @@ const defaults: Record<string, [number, number]> = {
   drift10000: [300, 300],
   contact: [300, 600],
   worlds25x19: [300, 1000],
+  rest2000: [300, 1000],
+  drive500: [300, 1000],
 };
+const traceEveryStep = process.env.BENCH_TRACE === "1";
 if (!(sceneName in defaults)) {
   throw new Error(`unknown scene ${sceneName}`);
 }
@@ -63,12 +76,14 @@ await preloadPhysics();
 const scene = buildScene(sceneName);
 const count = scene.bodies.length;
 
-const timers = { pose: 0, step: 0, events: 0 };
+const timers = { pose: 0, step: 0, events: 0, forces: 0 };
 for (const world of scene.worlds) {
   world.progress(0, dt);
   instrument(world, "PhysicsPoseSyncOut", "pose");
   instrument(world, "PhysicsStep", "step");
   instrument(world, "PhysicsEvents", "events");
+  instrument(world, "PhysicsForceGather:Force", "forces");
+  instrument(world, "PhysicsForceGather:Torque", "forces");
 }
 
 let tick = 0;
@@ -82,7 +97,7 @@ function progressAll(): void {
 for (let i = 0; i < warmup; i++) {
   progressAll();
 }
-timers.pose = timers.step = timers.events = 0;
+timers.pose = timers.step = timers.events = timers.forces = 0;
 let hash = 2166136261;
 let tickMs = 0;
 for (let i = 0; i < steps; i++) {
@@ -91,6 +106,9 @@ for (let i = 0; i < steps; i++) {
   tickMs += performance.now() - start;
   if (scene.digestStep !== undefined) {
     hash = scene.digestStep(hash);
+  }
+  if (traceEveryStep) {
+    hash = digestBodies(hash, scene.bodies);
   }
 }
 hash = digestBodies(hash, scene.bodies);
@@ -115,10 +133,14 @@ console.log(
     poseNs: perBodyStep(measured.pose),
     stepNs: perBodyStep(measured.step),
     eventsNs: perBodyStep(measured.events),
-    otherNs: perBodyStep(tickMs - measured.pose - measured.step - measured.events),
+    forcesNs: perBodyStep(measured.forces),
+    otherNs: perBodyStep(
+      tickMs - measured.pose - measured.step - measured.events - measured.forces
+    ),
     allocBytesPerStep: alloc.bytesPerStep,
     allocWindow: alloc.window,
     checksum: hash.toString(16).padStart(8, "0"),
+    ...(traceEveryStep ? { trace: true } : {}),
     ...(scene.digestStep !== undefined ? { events: eventCounts } : {}),
   })}`
 );
@@ -138,6 +160,10 @@ function buildScene(name: string): Scene {
       return contactScene();
     case "worlds25x19":
       return manyWorldsScene(25, 19);
+    case "rest2000":
+      return restScene(2000);
+    case "drive500":
+      return driveScene(500);
   }
   throw new Error(name);
 }
@@ -163,6 +189,39 @@ function driftBody(world: World, i: number, salt: number): Entity {
     .set(AngularVelocity, { value: ((i + salt) % 5) * 0.01 });
   world.entity().add(ChildOf, body).set(Circle, { radius: 0.25 });
   return body;
+}
+
+/** Awake bodies at rest: Box2D reports all of them every step, and none of their values change. */
+function restScene(n: number): Scene {
+  const world = new World();
+  world.module(PhysicsModule, { gravity: { x: 0, y: 0 }, fixedTimeStep: dt, enableSleep: false });
+  const bodies = [];
+  for (let i = 0; i < n; i++) {
+    const body = world
+      .entity()
+      .set(Body, { type: BodyType.Dynamic })
+      .set(Position, { x: i * 10, y: (i % 7) * 10 })
+      .set(Rotation, { angle: (i % 11) * 0.1 })
+      .set(LinearVelocity, { x: 0, y: 0 })
+      .set(AngularVelocity, { value: 0 });
+    world.entity().add(ChildOf, body).set(Circle, { radius: 0.25 });
+    bodies.push(body);
+  }
+  return { worlds: [world], bodies };
+}
+
+/** Drifting bodies pushed by a constant force and torque every step, like thrusting ships. */
+function driveScene(n: number): Scene {
+  const world = new World();
+  world.module(PhysicsModule, { gravity: { x: 0, y: 0 }, fixedTimeStep: dt, enableSleep: false });
+  const bodies = [];
+  for (let i = 0; i < n; i++) {
+    const body = driftBody(world, i, 0)
+      .set(Force, { x: ((i % 9) - 4) * 0.05, y: ((i % 5) - 2) * 0.05 })
+      .set(Torque, { value: ((i % 7) - 3) * 0.001 });
+    bodies.push(body);
+  }
+  return { worlds: [world], bodies };
 }
 
 /** Space Rocks shape: many small worlds, every body always awake and moving. */

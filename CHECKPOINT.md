@@ -8,12 +8,13 @@ box2d3-wasm **5.2.0** (`ee2a63b`). Reference consumer: `vworlds/vecs` (read-only
 | Phase | State |
 | --- | --- |
 | 1. Setup and baseline | **done** (BREAKPOINT A) |
-| 2. Plan and API design | not started |
+| 2. Plan and API design | **done** (BREAKPOINT B) |
 | 3. Iterate | not started |
 | 4. Final analysis | not started |
 
 Hard rule for every later phase: results stay bit-identical to stock 5.2.0. Proof per build: the
-five checksums below, plus vecs's real-WASM suites (`motion_accuracy.test.ts` among them).
+seven scene checksums (five from Phase 1, two added in Phase 2), the fast-path differential test,
+plus vecs's real-WASM suites (`motion_accuracy.test.ts` among them). See §2.5.
 
 ---
 
@@ -84,33 +85,43 @@ loop count. Categories: **embind-js** = JS glue in `Box2D.deluxe.mjs`; **embind-
 binding thunks in wasm; **wasm-alloc** = malloc/free + the allocator's pthread mutex (embind's
 temporaries); **box2d** = Box2D's own C code; **vecs-physics** = the adapter; **vecs** = ECS core.
 
-Self time, share of the whole tick:
+Self time, share of the whole tick (GC samples sit at the profile root, outside any JS stack;
+those inside the tick loop's time window are counted as `gc` — corrected in Phase 2):
 
 | category | drift500 | drift2000 | drift10000 | contact | worlds25x19 |
 |---|---:|---:|---:|---:|---:|
-| embind-js | 60.8% | 60.3% | 58.4% | 45.0% | 54.8% |
-| embind-wasm | 6.3% | 4.9% | 5.9% | 4.0% | 5.5% |
-| wasm-alloc | 5.3% | 4.9% | 5.0% | 3.7% | 4.1% |
-| **embind / marshalling total** | **72.4%** | **70.1%** | **69.3%** | **52.7%** | **64.4%** |
-| box2d | 5.4% | 4.4% | 5.4% | 22.4% | 5.7% |
-| vecs-physics | 8.1% | 7.8% | 9.6% | 8.5% | 8.8% |
-| vecs | 11.9% | 15.9% | 13.9% | 14.9% | 15.9% |
-| engine (V8 internals) + harness | 2.3% | 1.8% | 1.8% | 1.5% | 5.2% |
+| embind-js | 59.8% | 59.6% | 57.6% | 44.3% | 54.3% |
+| embind-wasm | 6.2% | 4.8% | 5.8% | 4.0% | 5.5% |
+| wasm-alloc | 5.2% | 4.8% | 4.9% | 3.7% | 4.0% |
+| gc | 1.6% | 1.2% | 1.2% | 1.5% | 0.9% |
+| **embind / marshalling / GC total** | **72.8%** | **70.4%** | **69.6%** | **53.4%** | **64.7%** |
+| box2d | 5.3% | 4.4% | 5.3% | 22.1% | 5.6% |
+| vecs-physics | 8.0% | 7.7% | 9.5% | 8.3% | 8.8% |
+| vecs | 11.7% | 15.7% | 13.8% | 14.7% | 15.7% |
+| engine (V8 internals) + harness | 2.2% | 1.8% | 1.8% | 1.5% | 5.2% |
 
-By system:
+Note on "copy-out": vecs runs every system inside `world.defer(...)` and drains the command queue
+in `endDefer()`, so the deferred flush of pose-out's `entity.set` calls runs **inside**
+`PhysicsPoseSyncOut._run`. The copy-out timer (and vecs's own benchmark number) therefore includes
+the flush. The profile shows the flush under "other", because its frames are not under
+`pose_out.js`.
+
+By system (system totals include GC as its own row; the indented category rows come from the
+first, GC-free pass and are within ±0.3 points):
 
 | system / category | drift500 | drift2000 | drift10000 | contact | worlds25x19 |
 |---|---:|---:|---:|---:|---:|
-| **PhysicsPoseSyncOut** | **87.9%** | **86.2%** | **90.3%** | **63.9%** | **71.6%** |
+| **PhysicsPoseSyncOut** | **86.5%** | **85.2%** | **89.1%** | **62.9%** | **70.9%** |
 | &nbsp;&nbsp;embind-js + embind-wasm + wasm-alloc | 71.6% | 69.8% | 69.1% | 50.8% | 57.9% |
 | &nbsp;&nbsp;vecs-physics (loop, compares) | 7.8% | 7.7% | 9.6% | 7.1% | 6.0% |
 | &nbsp;&nbsp;vecs (`entity.get`, `entity.set` enqueue) | 5.1% | 5.7% | 8.2% | 3.6% | 5.5% |
 | &nbsp;&nbsp;box2d (`b2Atan2`, velocity getters) | 1.7% | 1.4% | 1.7% | 1.1% | 1.1% |
-| **PhysicsStep** | **4.4%** | **3.2%** | **3.8%** | **21.8%** | **12.7%** |
+| **PhysicsStep** | **4.3%** | **3.2%** | **3.8%** | **21.5%** | **12.6%** |
 | &nbsp;&nbsp;box2d | 3.6% | 3.0% | 3.8% | 21.4% | 4.6% |
 | &nbsp;&nbsp;embind + `b2GetTicks`→`performance.now` (engine) | 0.7% | 0.2% | 0.0% | 0.4% | 8.0% |
-| **PhysicsEvents** | **0.4%** | **0.2%** | **0.1%** | **3.2%** | **2.7%** |
-| **other** (deferred flush, empty systems: vecs) | **7.3%** | **10.4%** | **5.9%** | **11.2%** | **13.0%** |
+| **PhysicsEvents** | **0.4%** | **0.2%** | **0.1%** | **3.1%** | **2.7%** |
+| **other** (deferred flush, empty systems: vecs) | **7.2%** | **10.3%** | **5.8%** | **11.0%** | **12.8%** |
+| **(garbage collector)** | **1.6%** | **1.2%** | **1.2%** | **1.5%** | **0.9%** |
 
 Top self-time functions (drift2000; the others are in `perf/results/profiles/stock-*.txt`):
 
@@ -205,7 +216,7 @@ Also, `PhysicsEvents` allocates three `Set`s per step (vecs-side).
 
 ---
 
-## Decisions so far
+## Decisions taken in Phase 1
 
 - Baseline vecs = commit `2d58dd7` of vecs `perf/273-pose-out-bulk-read` (the PR's benchmark on
   unmodified vecs code). The PR's `c61c2f0` supported-API tweak is not the baseline.
@@ -214,22 +225,302 @@ Also, `PhysicsEvents` allocates three `Set`s per step (vecs-side).
 - `shell/1_build_wasm.sh` gained an `EXTRA_EMCC_OPTS` hook. With it empty the output is
   byte-identical (verified with `cmp`).
 
-## Next steps (Phase 2, after go-ahead)
+---
 
-Design the data API from the table above. Candidates already visible, in expected order of gain:
+## Phase 2: plan and API design
 
-1. Bulk move export (pointer + count + generated layout, or copy into a caller-owned typed array
-   in one crossing) carrying the body's integer user data, the angle already computed by
-   `b2Rot_GetAngle` in wasm, and optionally linear/angular velocity. This removes ~6 handles and
-   2 marshals per body.
-2. Raw (non-embind) exports for per-step calls: ids passed as packed integers, so no value_object
-   marshalling.
-3. "Step and export" in one call. Batch many worlds in one crossing.
-4. Contact/sensor/hit events as flat arrays.
-5. Scalar/out-param body getters and setters for the change-driven paths.
-6. Fixed per-world costs: `b2GetTicks` timer calls (timing-only) and the empty-world step crossing.
-7. A faster embind `makeClassHandle` for the legacy API (helps every unmigrated call site).
-8. Then build variants (allocator, `-O3`/LTO flags, SIMD), each gated on identical checksums.
+### 2.0 New evidence gathered for the design (measurement-only probes)
+
+The probes live in `perf/spikes/` (`raw-crossing.mjs`, `step-fixed-cost.mjs`,
+`ideal-reader.pose_out.js`). The ideal-reader probe replaces the compiled `pose_out.js` in a *copy*
+of the built vecs (header comment says how). It uses a private embind pointer and `Math.atan2`, so
+it is never shipped and its checksums differ from stock. Same-session numbers; the host drifted between sessions (stock drift2000 copy-out was
+5,337 ns in Phase 1 and 8,202–8,419 ns during Phase 2), so only ratios within one alternating
+session are compared.
+
+| question | finding |
+|---|---|
+| Price of a raw (non-embind) wasm export call | **9 ns** (`_free(0)`), vs ~130 ns for an embind call taking a `bodyId` and ~420–460 ns for one returning a class handle. A typed-array read is a few ns. |
+| What happens to views when memory grows? | Deluxe memory is a `SharedArrayBuffer`: after growth `Module.HEAPU8` is replaced (in the growing thread only), views created before growth **stay valid for their old range** (reads and writes hit the same memory), and new regions need a new view. Compat (non-shared) detaches the old buffer, so old views become length 0. `wasmMemory` is not exported today. |
+| How fast can copy-out get if the data were free? | Ideal-reader probe: move events read straight from wasm memory (no handles, `Math.atan2` as a timing proxy for a wasm-computed angle). Copy-out **6,410 → 622 ns** (drift500, 10.3×) and **8,202 → 724 ns** (drift2000, 11.3×). Whole tick **6,723 → 909** (7.4×) and **8,502 → 927** (9.2×). 3 alternating rounds each. |
+| What does the ideal path still allocate? | drift2000: **449 B/body/step**, all from vecs's `entity.set` (the `{x, y}` literal, the deferred command, update routing), because Position and Rotation change every step. rest2000 (no writes): 25 B/body/step, from V8 boxing fractional doubles passed to a non-inlined helper. That is avoidable with an in-place compare. |
+| Why is a small-world step so expensive? | Profile of `b2World_Step` on 0- and 19-body worlds: **≈70% is Box2D's profiling timers**. `b2GetTicks` → `clock_gettime` → JS imports `_clock_time_get` / `_emscripten_get_now` → `performance.now()`, plus BigInt conversion and a heap-view check, many times per step (per stage, per substep). In the worlds25x19 tick this clock chain is **8.5%** (≈575 ns/body); in the single-world scenes 0.2–0.3%. |
+| Do the timers ever affect results? | No. All 44 call sites write `world->profile.*` (`physics_world.c`, `solver.c`, `island.c`) or the `B2_SNOOP_TOI_COUNTERS` statistics (`distance.c`). |
+| Box2D facts used by the design | Move events are written in `b2FinalizeBodiesTask` and already carry `body->userData`. Embind's `GetAngle` is `b2Atan2(s, c)`, i.e. `b2Rot_GetAngle`. The glue never touches body or shape `userData` (only callback contexts). vecs EIDs are safe integers from id pools (entities from 1000, recycled), so normally `< 2^32`. Box2D's `test_determinism.c` asserts an identical hash for 1–5 workers. |
+
+Two scenes were added to the harness to make the read path and the force path measurable:
+
+| scene (Phase 2 session, stock, 3 rounds × npm/src) | copy-out | step | forces | whole tick | alloc / body / step | checksum |
+|---|---:|---:|---:|---:|---:|---|
+| `rest2000`: 2,000 awake bodies at rest, sleep off; all in the move events every step, nothing changes | 6,498 | 139 | – | 6,681 | 3,306 B (no writes at all) | `17fc310b` |
+| `drive500`: 500 drifting bodies with a constant Force and Torque | 6,973 | 576 | 1,484 | 9,157 | 4,877 B | `fd7cc876` |
+| `drift2000` in the same session (host-speed reference) | 8,419 | 255 | – | 8,725 | 3,751 B | `a66a94ee` |
+
+Noise in that session: 1–17% max/min. Raw data: `perf/results/phase2-extra-*`.
+
+### 2.1 The fork's data API ("fast path", prefix `b2x_`)
+
+All of it is **additive**: the embind API stays byte-for-byte as it is, so vecs can migrate one
+call site at a time. The fast path is plain C exports (`EMSCRIPTEN_KEEPALIVE`) taking and
+returning only `i32`/`f32`, called as `Module._b2x_*`. That costs ~9 ns per call with no
+marshalling, no handle and no allocation. Every function calls the same public Box2D C function(s)
+that the embind binding calls, with the same arguments, at the moment the caller chooses. That is
+why its results are identical by construction (proof in §2.5).
+
+**A. Ids.** Box2D ids are packed into 32-bit integers, so no value_object marshalling:
+
+- world: `w = index1 | generation << 16` (both `uint16`);
+- body, shape, chain, joint: two arguments `(index1, rev)` with `rev = world0 | generation << 16`;
+- JS helpers `fp.world(worldId)`, `fp.rev(id)` convert the embind id objects vecs already holds.
+  The adapter stores `index1`/`rev` next to `Body._bodyId` once, at creation.
+
+**B. Layout descriptor, never handwritten.** `const char* b2x_GetLayout(void)` returns a JSON
+string built once from an X-macro list of `sizeof` / `offsetof` expressions. It covers every
+struct the fast path exposes: the export record, Box2D's own `b2BodyMoveEvent`,
+`b2ContactBeginTouchEvent`, `b2ContactEndTouchEvent`, `b2ContactHitEvent`,
+`b2SensorBeginTouchEvent`, `b2SensorEndTouchEvent`, the span headers, the motion and pose
+out-structs. It also carries a `version`. A `static_assert` requires every exposed field to be
+4-byte aligned, so JS can address fields as `base + offset/4` in `Float32Array`/`Int32Array`
+views. JS parses the layout once at preload; nothing else in JS hardcodes an offset.
+
+**C. Bulk move export, the copy-out replacement.**
+
+```c
+typedef struct b2xMove {   // 48 bytes; real offsets come from b2x_GetLayout()
+  int32_t  bodyIndex;      // bodyId.index1
+  uint32_t rev;            // bodyId.world0 | bodyId.generation << 16
+  uint32_t userData;       // (uint32_t)(uintptr_t) body user data (see E)
+  uint32_t flags;          // bit0 fellAsleep, bits1-2 b2BodyType, bit3 body valid
+  float x, y;              // transform.p
+  float c, s;              // transform.q
+  float angle;             // b2Rot_GetAngle(q): the same b2Atan2(s, c) embind's GetAngle runs
+  float vx, vy, w;         // b2Body_GetLinearVelocity / b2Body_GetAngularVelocity (flag)
+} b2xMove;
+
+int b2x_World_GetMoveCount(int world);
+int b2x_World_ExportMoves(int world, b2xMove* out, int capacity, int flags);
+//   flags: B2X_EXPORT_VELOCITY (1), B2X_EXPORT_DYNAMIC_ONLY (2)
+//   Writes one record per move event, in Box2D's event order (the order vecs iterates today).
+//   Returns the number of records; if it exceeds `capacity`, only `capacity` were written and
+//   the caller grows its buffer and calls again (events stay valid until the next step).
+void b2x_World_GetMoveEventSpan(int world, b2xSpan* out);   // zero-copy b2BodyMoveEvent[]
+```
+
+The buffer is caller-owned wasm memory: the adapter `_malloc`s it once, grows it rarely, and
+reads it through whole-memory typed views. In one crossing per world per step, JS gets the
+position, angle, both velocities, the body index and the user data of every moved body, with
+zero allocations. `B2X_EXPORT_VELOCITY` reads velocities with the same public getters vecs calls
+today, at the same simulation moment (after the step, before any other mutation).
+
+**D. Step and event spans.**
+
+```c
+void b2x_World_Step(int world, float dt, int subSteps);
+int  b2x_World_StepAndExportMoves(int world, float dt, int subSteps,
+                                  b2xMove* out, int capacity, int flags);   // fused variant
+typedef struct b2xSpan { uint32_t ptr; int32_t count; } b2xSpan;
+typedef struct b2xContactSpans { b2xSpan begin, end, hit; } b2xContactSpans;
+typedef struct b2xSensorSpans  { b2xSpan begin, end; } b2xSensorSpans;
+void b2x_World_GetContactSpans(int world, b2xContactSpans* out);
+void b2x_World_GetSensorSpans(int world, b2xSensorSpans* out);
+```
+
+Contact, sensor and hit events need no copy. The spans point into Box2D's own event arrays
+(valid until the next step or world mutation), and JS reads `shapeIdA.index1`, `point.x`,
+`approachSpeed`… at layout offsets. One crossing replaces the header handle, three count getters
+and a handle (or value object) per event.
+
+**E. Integer user data.** `b2x_Body_SetUserData(i, r, u32)` / `b2x_Shape_SetUserData(i, r, u32)`
+store an integer in Box2D's existing `void* userData`; move records carry it (Box2D copies it into
+every move event). vecs can store the EID there and skip its reverse map when `eid < 2^32`, falling
+back to `bodyIndex` otherwise. This is optional: the reverse `ArrayMap` lookup costs ~3.5 ns.
+
+**F. Scalar / out-parameter variants of every per-body getter and setter.** These are
+**generated** from `box2d.h` by `tools/gen_fastpath.py`, for all 65 `b2Body_*` functions.
+Scalars pass and return as-is. `b2Vec2`/`b2Rot`/`b2Transform`/`b2AABB`/`b2MassData` arguments
+are flattened to floats, and returns go to a caller out-pointer. Id arrays (`GetShapes`,
+`GetJoints`) become packed `(index1, rev)` pairs, and names and contact data are skipped. The
+TypeScript declarations are generated in the same pass. A few hand-written composites each
+reproduce, in one crossing, an exact call sequence vecs makes today:
+
+| composite | equivalent to (today, in vecs) |
+|---|---|
+| `b2x_Body_SetPosition(i, r, x, y)` | `b2Body_SetTransform(id, {x, y}, b2Body_GetRotation(id))` (pose-in Position) |
+| `b2x_Body_SetAngle(i, r, angle)` | `b2Body_SetTransform(id, b2Body_GetPosition(id), b2MakeRot(angle))` (pose-in Rotation) |
+| `b2x_Body_GetPose(i, r, out)` | position, rotation and `b2Rot_GetAngle` (kinematic targets) |
+| `b2x_Body_GetMotion(i, r, out)` | the 8 getters of `physics(world).bodyMotion` (dead reckoning) |
+
+Float arguments cross the boundary as `f32`, which rounds exactly as embind's float conversion
+does (round to nearest even from the JS double). So `vec.Set(x, y)` + `SetLinearVelocity` and
+`b2x_Body_SetLinearVelocity(i, r, x, y)` hand Box2D the same bits.
+
+**G. Exported memory and the growth rule.** The build exports `wasmMemory` (plus `HEAPF32` /
+`HEAP32`). The rule, documented in the API reference:
+
+1. *Calls that may grow memory:* creating or destroying worlds, bodies, shapes, joints and
+   chains; `b2World_Step` / `b2x_World_Step` (contact, pair and island arrays grow); any embind
+   call that returns a class by value or marshals a value_object; `_malloc`.
+2. *Calls that never grow memory:* every `b2x_Body_*` / `b2x_Shape_*` getter and setter,
+   `b2x_World_ExportMoves` into a caller buffer, `b2x_World_GetMoveCount`, `b2x_World_Get*Spans`,
+   `b2x_GetLayout` after the first call.
+3. *JS:* keep whole-memory views; after a call from list 1 and before reading memory, call
+   `fp.sync()`. It compares `memory.buffer` with the views' buffer and rebuilds them on change
+   (deluxe: a new `SharedArrayBuffer` object after growth; compat: the old buffer is detached).
+   One check per step costs ~40 ns.
+
+**H. JS helper `box2d3-wasm/fastpath`** (new package export with `.d.ts`):
+`createFastPath(module)` returns `{ layout, memory, f32, i32, u32, sync(), world(id), rev(id),
+alloc(bytes), free(ptr) }`, plus a small move-exporter that owns a growable record buffer. The
+helper has no per-call allocation. The vecs hot loop reads `fp.f32` / `fp.i32` directly.
+
+**I. Profile-timer switch.** A ~20-line patch to `box2d/src/timer.c` (emscripten branch), kept as
+`box2d3-wasm/patches/box2d/0001-runtime-switch-for-profile-timers.patch` and applied idempotently
+by `shell/0_build_makefile.sh`. It adds `b2SetProfileTimers(bool)`, exported as
+`b2x_SetProfileTimers(int)`. When off, `b2GetTicks` returns 0 and `b2GetMilliseconds*` return 0
+without reading the clock, so `b2World_GetProfile` reports zeros. The default stays **on**
+(stock behavior); vecs turns it off at preload. It is the only patch to Box2D's C sources.
+
+**J. Many small worlds.** `b2x_Worlds_Step(const int32_t* worlds, int n, float dt, int subSteps)`
+and a matching batched export would save `n−1` crossings (~10 ns each) per call type per tick, at
+most ~2 ns/body. Using them would also force vecs to step every world inside one world's phase,
+reordering phases. So this is **deferred**: implemented only if, after Round 3, per-world crossings
+are still more than 5% of the worlds25x19 tick. The fixed per-world costs that matter (timers,
+three event headers, embind step marshalling) are removed per world by C, D and I instead.
+
+**K. Legacy embind speed-up (optional).** `makeClassHandle` builds every handle through
+`Object.create(proto, {$$: {value, writable: true}})`, V8's slow descriptor path (32–44% of the
+stock tick). A post-processing patch of the generated JS could speed up every not-yet-migrated
+call site. It is acceptable only if `$$` keeps its exact attributes (non-enumerable,
+non-configurable, writable); for example, `JSON.stringify(handle)` must still give `"{}"`.
+
+### 2.2 Ideas: expected gain, risk, effort, proof
+
+Gains are tied to the Phase 1 profile lines (drift2000 numbers in ns/body/step of a 5,532 ns tick
+unless stated).
+
+| # | idea | profile lines it removes | expected gain | risk | effort | bit-identity proof |
+|---|---|---|---|---|---|---|
+| 1 | Bulk move export (C) + typed-array pose-out loop | In `PhysicsPoseSyncOut`: `makeClassHandle` 43.5% (2,406), embind `get` 5.7% (315), `RegisteredPointer_fromWireType` 4.5% (249), `toWireType` 2.6% (144), `validateThis` 2.0% (111), `fromWireType` 1.2% (66), embind-wasm 4.8% (266), wasm-alloc 4.8% (266), GC 1.2% (66), most of the 7.7% loop: **≈3,900 ns/body** | copy-out ~7–10×, tick ~5–8× on drift (the probe reached 10–11× / 7–9×); rest2000 read path ~15×, allocation → 0 | low: public getters in C, same order and moment | M | differential test (every field of every body every step vs embind, `Object.is`), 7 checksums, vecs suites |
+| 2 | Raw step + zero-copy contact/sensor/hit spans | `b2World_Step` worldId marshal; `GetBodyEvents` 564, `GetContactEvents` 731, `GetSensorEvents` 680 ns per world-step; per event: begin handle + 2 shapeIds ≈ 750 ns, hit ≈ 1,600 ns (contact `PhysicsEvents` 3.1% ≈ 240 ns/body; worlds25x19 2.7% + headers) | contact events 240 → ~60 ns/body; worlds25x19 −~100 ns/body of per-world headers | low | M | contact checksum hashes every event (other entity, hit point, normal, speed) every step; differential test of spans vs embind events |
+| 3 | Profile-timer switch | clock chain: worlds25x19 8.5% of tick (≈575 ns/body, ~70% of its step); 0.2–0.3% elsewhere | worlds25x19 step 840 → ~250 ns/body | low: only `world->profile` and TOI stats read the timers; profile reads 0 when off | S | 7 checksums with the switch off and on; `BENCH_TRACE=1` per-step trace |
+| 4 | Generated scalar/out-param body API + composites; migrate pose-in, forces, impulses, kinematic targets, `bodyMotion`, `isAwake` | drive500 forces 1,484 ns/body (16% of its tick); per op: `bodyMotion` ≈2,400 → ~40, `ApplyForceToCenter`+`vec.Set` ≈1,000 → ~15, pose-in ≈1,500–2,000 → ~20, kinematic target ≈3,000 → ~60 ns | drive500 tick −~1,400 ns/body; ~0 on the other scenes (change-driven paths) | low | M (generator) | differential setter test: two identical worlds driven through embind and through `b2x_`, full state compared bitwise every step; drive500 checksum |
+| 5 | Integer user data in move records | reverse `ArrayMap` lookup ~3.5 ns | ~0 (completeness) | low; EIDs ≥ 2^32 need the index fallback | S | covered by 1 |
+| 6 | Fused step+export; batched multi-world calls | ~10 ns per crossing | ≤ 2 ns/body | fused export reads velocities before any postStep mutation; batching reorders vecs phases | S | 1, 2 |
+| 7 | Faster embind handle construction (legacy) | `makeClassHandle` on unmigrated paths | stock-adapter copy-out maybe −30–40%; 0 on migrated paths | medium: embind internals and visible handle semantics | M | vecs suites with the *unmodified* adapter; checksums |
+| 8 | Build variants: `-sSTACK_OVERFLOW_CHECK=2` → off in Release, LTO for the Box2D library, wasm-opt level, allocator | box2d self time 4.4% (drift) / 22% (contact) | 0–10% of the step | medium: any result change disqualifies | S each | checksums + per-step trace; dropped with one log line on any change |
+| 9 | Threads for big worlds (`b2CreateThreadedWorld`, enkiTS, already in the deluxe glue) | contact `PhysicsStep` 21.5% | contact step maybe 1.5–2.5× | medium: must give the same hash (Box2D tests 1–5 workers); small worlds get slower | S to measure | checksums at 1, 2, 4 workers; reported as an optional vecs setting |
+| 10 | Scratch adapter only (vecs side): reuse `PhysicsEvents`' three `Set`s per step, keep doubles unboxed in the loop | allocation | read path to 0 B/step | low | S | vecs suites |
+
+### 2.3 Rounds
+
+Each round: implement, then the proof kit (§2.5), then ≥5 alternating timing rounds against
+stock, then a round entry in this file.
+
+| round | content | expected effect (vs Phase 1) |
+|---|---|---|
+| **R1** | Fast-path foundation (ids, layout JSON, memory export, `fastpath` helper, d.ts), `b2x_World_Step`, `b2x_World_ExportMoves`, user data; differential test; scratch adapter pose-out + step | drift copy-out ~7–10×, tick ~5–8×; rest2000 read path ~0 B/step; contact tick ~2.5×; worlds25x19 ~2.8× |
+| **R2** | Event spans + adapter `PhysicsEvents` on spans with reused sets; drop the per-world `GetBodyEvents` header | contact events 240 → ~60; worlds25x19 −~100 ns/body |
+| **R3** | Profile-timer patch and switch; adapter turns timers off | worlds25x19 step 840 → ~250; tick ~4× |
+| **R4** | Generated `b2x_Body_*` API + composites; adapter migrates pose-in, forces, impulses, kinematic targets, `bodyMotion`, `isAwake` | drive500 ~5×; other scenes unchanged |
+| **R5** | Build variants (item 8), each gated; threads for the contact scene (item 9) | 0–10% on the step; contact maybe more with threads |
+| **R6** | Whatever the R5 profile ranks first; legacy embind speed-up (item 7) if its semantics can be kept exactly | – |
+
+Stop rule (from the mission): stop after two consecutive rounds that each gain < 5% on the whole
+tick. Then record what the remaining cost is made of. Expected: vecs's own `entity.get` / `set` /
+flush, the Box2D step, and the vecs systems that run per world per tick.
+
+### 2.4 Targets (committed floors, relative to the Phase 1 baseline)
+
+Measured as same-session alternating ratios against stock (≥5 rounds, medians), and also reported
+in absolute ns.
+
+| metric | scene(s) | floor (committed) | stretch | expected |
+|---|---|---|---|---|
+| copy-out (`PhysicsPoseSyncOut` incl. its flush) | drift500 / drift2000 / drift10000 | **≥ 5× cheaper** | ≥ 10× | 7–10× |
+| JS allocations per step on the physics read path | rest2000 (reads every body, writes nothing) | **0 B per body per step**, with any fixed per-step bytes attributed | 0 B per step | 0 |
+| whole tick per body | drift500 / drift2000 / drift10000 (no contacts) | **≥ 3× cheaper** | ≥ 6× | 5–8× |
+| reported separately | contact | – | – | tick ~2.5–3× (Box2D's step is 22% of baseline and stays, unless threads) |
+| reported separately | worlds25x19 | – | – | tick ~4× after R3 |
+| reported separately | drive500, rest2000 | – | – | ~5× / ~15× |
+
+On drift scenes, allocations after R1 are expected to be only vecs's `entity.set` path
+(~450 B/body/step, measured by the probe). That is vecs-owned and reported with its breakdown.
+Zero there would need a vecs API change and is listed in the migration guide, not promised here.
+
+### 2.5 Verification protocol (every round, every build)
+
+1. **Checksums**, all 7 scenes (drift500 `11c76fa7`, drift2000 `a66a94ee`, drift10000 `70623967`,
+   contact `5db7f953`, worlds25x19 `a8a0671e`, rest2000 `17fc310b`, drive500 `fd7cc876`). They must
+   match stock in the same run, with the scratch adapter *and* with the unmodified adapter on the
+   fork build. Build-flag variants also run `BENCH_TRACE=1` (state folded every step).
+2. **Differential test** `perf/tests/fastpath-differential.mjs` (box2d only, no vecs), over drift,
+   contact and sensor scenes:
+   - every exported move record is compared field by field with embind's `GetMoveEvent` /
+     `transform` / `GetAngle` / velocity getters with `Object.is`, every body, every step;
+   - spans are compared with embind's contact, hit and sensor events;
+   - every generated getter is compared with its embind twin;
+   - setters: two identical worlds, one driven through embind and one through `b2x_` with the
+     same inputs, compared bitwise every step;
+   - it runs on deluxe **and** compat, and includes a forced memory-growth phase.
+3. **vecs suites**: `@vworlds/vecs-physics` (537 tests), `@vworlds/vecs-phaser-server` (154, incl.
+   `motion_accuracy.test.ts` real-WASM DR), `@vworlds/vecs-phaser` (119). They run (a) unmodified
+   against the fork build (embind compatibility) and (b) with the scratch adapter.
+4. **Timing**: `perf/bench/run.mjs`, ≥5 alternating rounds stock vs fork, medians plus max/min
+   spread; allocation pass; a profile for the next round's ranking.
+
+### 2.6 Scratch adapter and migration order (preview of the Phase 4 guide)
+
+The scratch adapter is a local-only branch `scratch/fork-adapter` in the `../vecs-scratch`
+worktree (based on `2d58dd7`, never pushed). Call sites in migration order:
+
+1. `adapter/runtime.ts`: create the fast path at preload, allocate scratch/record buffers, turn
+   profile timers off (R3).
+2. `core/step.ts`: `b2World_Step` → `b2x_World_Step`.
+3. `body/pose_out.ts`: header + `GetMoveEvent` + `transform`/`p`/`q` + velocity getters →
+   `b2x_World_ExportMoves` + typed-array loop. Same order, same compare-before-write, same
+   Dynamic/destroyed checks.
+4. `events/publish.ts`: contact/sensor headers and events → spans; reuse the three `Set`s.
+5. `body/lifecycle.ts`, `shapes/lifecycle.ts`: keep the packed id on the component; optional
+   user data.
+6. `adapter/queries.ts`: `bodyMotion` → `b2x_Body_GetMotion`, `isAwake` → raw.
+7. `body/pose_in.ts`, `forces/*.ts`, `kinematic/targets.ts`: raw setters and getters.
+8. Rare paths (mass, joints, shapes, queries): stay on embind.
+
+### 2.7 Decisions taken in Phase 2
+
+- The fast path is additive and C-level, with no embind changes in R1–R6 except the optional,
+  semantics-preserving item 7.
+- Copy into a caller-owned buffer for moves (the angle and velocities must come from wasm).
+  Zero-copy spans for contact, sensor and hit events (all fields are raw Box2D data).
+- The adapter keeps step and export as separate calls (step phase vs postStep). The fused call is
+  provided and measured, but not used by default.
+- Cross-world batching is deferred (§2.1 J).
+- The profile timers default to on; vecs opts out.
+- Ids are passed as packed integers; EIDs may ride in user data, with a fallback.
+- The per-body API is generated from `box2d.h`, not hand-written.
+
+### 2.8 Risks and open questions for the reviewer
+
+- **Publishing** `@vworlds/box2d3-wasm` needs credentials for the `@vworlds` npm scope (or GitHub
+  Packages or a release tarball). It will be checked in Phase 4. Proposed version:
+  `5.2.0-vworlds.1`, consumed by vecs as an npm alias (`"box2d3-wasm": "npm:@vworlds/box2d3-wasm@…"`),
+  so imports stay unchanged.
+- Host noise (13–40% single runs, slow drift between sessions) is handled by same-session
+  alternating comparisons only.
+- Stale typed views after memory growth are the main correctness hazard of the new API. They are
+  covered by the documented rule, `fp.sync()`, and a forced-growth phase in the differential test
+  on both flavours.
+
+## Next steps (Phase 3, after go-ahead)
+
+1. R1: add `box2d3-wasm/csrc/fastpath.cpp` (ids, layout JSON, `b2x_World_Step`,
+   `b2x_World_GetMoveCount`, `b2x_World_ExportMoves`, `b2x_World_GetMoveEventSpan`, user data),
+   compile it in `shell/1_build_wasm.sh`, export `wasmMemory`/`HEAPF32`/`HEAP32`, add the
+   `fastpath` helper and its `.d.ts` plus the `package.json` export, write
+   `perf/tests/fastpath-differential.mjs`, then migrate `core/step.ts` and `body/pose_out.ts` in
+   `../vecs-scratch` (local branch `scratch/fork-adapter`).
+2. Run the proof kit (§2.5) and ≥5 alternating rounds; append "Round 1" to this file; continue
+   with R2…R6 as planned, re-planning if a round surprises.
 
 ---
 
@@ -281,4 +572,14 @@ BOX2D_ENTRY=../builds/stock-src/entry.mjs node perf/bench/embind-ops.mjs
 ```
 
 Reference checksums (stock 5.2.0, default warmup/steps per scene): drift500 `11c76fa7`,
-drift2000 `a66a94ee`, drift10000 `70623967`, contact `5db7f953`, worlds25x19 `a8a0671e`.
+drift2000 `a66a94ee`, drift10000 `70623967`, contact `5db7f953`, worlds25x19 `a8a0671e`,
+rest2000 `17fc310b`, drive500 `fd7cc876`.
+
+Phase 2 probes (measurement only):
+
+```bash
+BOX2D_ENTRY=../builds/stock-src/entry.mjs node perf/spikes/raw-crossing.mjs
+BOX2D_ENTRY=../builds/stock-prof/entry.mjs node --cpu-prof --cpu-prof-interval 100 \
+  --cpu-prof-dir=prof perf/spikes/step-fixed-cost.mjs 19
+node perf/bench/analyze-profile.mjs prof/<file>.cpuprofile
+```
