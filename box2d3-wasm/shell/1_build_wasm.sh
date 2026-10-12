@@ -65,6 +65,8 @@ EMCC_OPTS=(
   ${FLAVOUR_EMCC_OPTS[@]}
   ${FLAVOUR_LINK_OPTS[@]}
   )
+# Optional extra emcc flags, e.g. EXTRA_EMCC_OPTS="--profiling-funcs" for a profiling variant.
+read -r -a EXTRA_OPTS <<< "${EXTRA_EMCC_OPTS:-}"
 DEBUG_OPTS=(
   -g3
   -gsource-map
@@ -144,6 +146,7 @@ emcc -lembind \
 -I "$ENKITS_DIR/src" \
 -I "$B2CPP_DIR/include" \
 "${EMCC_OPTS[@]}" \
+"${EXTRA_OPTS[@]}" \
 -o "$ES_FILE" \
 --emit-tsd "$ES_TSD"
 { set +x; } 2>/dev/null
