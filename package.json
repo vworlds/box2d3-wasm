@@ -28,7 +28,9 @@
     "test": "node tests/fastpath-differential.mjs deluxe && node tests/fastpath-differential.mjs compat && node tests/integration.mjs",
     "test:stock": "node tests/stock-differential/run.mjs",
     "gen": "python3 scripts/gen_fastpath.py",
-    "gen:check": "python3 scripts/gen_fastpath.py --check"
+    "gen:check": "python3 scripts/gen_fastpath.py --check",
+    "demo:dev": "npm --prefix demo run dev",
+    "demo:build": "npm --prefix demo run build"
   },
   "author": "Alex Birch & Erik Sombroek",
   "repository": {
