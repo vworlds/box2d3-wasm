@@ -1,9 +1,9 @@
 // Types for box2d3-wasm/fastpath: the b2x_ fast path (plain wasm exports, no embind).
 // Reference: docs/fastpath.md in the vworlds/box2d3-wasm repository.
-import type { MainModule } from "./deluxe/Box2D.deluxe";
-import type { FastPathBodyExports } from "./fastpath_body.gen";
+import type { MainModule } from "./deluxe/Box2D.deluxe.js";
+import type { FastPathBodyExports } from "./fastpath_body.gen.js";
 
-export type { FastPathBodyExports } from "./fastpath_body.gen";
+export type { FastPathBodyExports } from "./fastpath_body.gen.js";
 
 /**
  * The hand-written b2x_ exports (src/fastpath.cpp), typed by parameter name. All arguments and
