@@ -34,10 +34,10 @@ is then unpublished and is released as is (an existing tag is left alone).
    filename `publish.yml`, no environment. Then **delete the `NPM_TOKEN` secret** (and revoke the
    token on npm). The workflow then publishes with an empty token over OIDC. Trusted publishing
    needs npm 11.5.1 or newer; Node 24 ships it.
-4. **`VECS_READ_TOKEN` secret.** vecs is private. Create a fine-grained personal access token with
+4. **`VECS_READ_SECRET` secret.** vecs is private. Create a fine-grained personal access token with
    resource owner `vworlds`, repository access *only* `vworlds/vecs`, and permission *Contents:
    Read-only* (Metadata read is added automatically). Add it as the repository secret
-   `VECS_READ_TOKEN`. Without it the vecs job in CI and the nightly run print a warning and are
+   `VECS_READ_SECRET`. Without it the vecs job in CI and the nightly run print a warning and are
    skipped; they do not fail. Pull requests from forks never see it.
 5. **Pages source.** *Settings > Pages > Build and deployment > Source: GitHub Actions*. Pages
    deploys from `master`, but the `github-pages` environment may only allow the default branch

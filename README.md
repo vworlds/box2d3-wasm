@@ -255,7 +255,7 @@ The demo is not part of the published package (it has its own `package.json`). C
 builds both flavours once, then runs `gen:check`, `check:bindings`, `test:release`, `npm test`, `npm run test:stock`,
 a check of the `npm pack` content, the demo build and the vecs test suites (physics, phaser-server,
 phaser) against the vecs commit pinned in `ci/vecs-ref`. The vecs repository is private: the suites
-need the `VECS_READ_TOKEN` secret and are skipped, with a warning, when it is missing.
+need the `VECS_READ_SECRET` secret and are skipped, with a warning, when it is missing.
 `.github/workflows/vecs-nightly.yml` runs the same suites against vecs's `dev` every night and opens
 a pull request that moves the pin when they pass. To run them yourself:
 

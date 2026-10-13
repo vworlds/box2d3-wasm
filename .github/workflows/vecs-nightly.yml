@@ -28,17 +28,17 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      VECS_READ_TOKEN: ${{ secrets.VECS_READ_TOKEN }}
+      VECS_READ_SECRET: ${{ secrets.VECS_READ_SECRET }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Is VECS_READ_TOKEN available?
+      - name: Is VECS_READ_SECRET available?
         id: gate
         run: |
-          if [ -n "$VECS_READ_TOKEN" ]; then
+          if [ -n "$VECS_READ_SECRET" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=vecs nightly skipped::The secret VECS_READ_TOKEN is not available, so the private vecs repository cannot be checked out. See docs/releasing.md."
+            echo "::warning title=vecs nightly skipped::The secret VECS_READ_SECRET is not available, so the private vecs repository cannot be checked out. See docs/releasing.md."
           fi
 
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -55,7 +55,7 @@ jobs:
         with:
           repository: vworlds/vecs
           ref: dev
-          token: ${{ secrets.VECS_READ_TOKEN }}
+          token: ${{ secrets.VECS_READ_SECRET }}
           path: vecs
           persist-credentials: false
 
