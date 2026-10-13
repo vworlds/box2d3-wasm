@@ -1,0 +1,90 @@
+name: Publish to npm
+
+# Merging dev into master releases. Authentication: NPM_TOKEN when the secret is set (needed for
+# the very first publish of a new package); otherwise npm trusted publishing over OIDC. See
+# docs/releasing.md.
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: publish-npm-master
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: true
+
+      - uses: ./.github/actions/build
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generated fast-path code is current
+        run: npm run gen:check
+
+      - name: Bindings cover Box2D's headers
+        run: npm run check:bindings
+
+      - name: Release script
+        run: npm run test:release
+
+      - name: Tests
+        run: npm test
+
+      - name: Tests against stock box2d3-wasm
+        run: npm run test:stock
+
+      - name: Package content
+        run: npm run check:pack
+
+      - name: Decide the version
+        id: version
+        run: node scripts/release-version.mjs
+
+      - name: Push the version bump and the tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUMPED: ${{ steps.version.outputs.bumped }}
+        run: |
+          version="$VERSION"
+          if [ "$BUMPED" = "true" ]; then
+            git add package.json package-lock.json
+            git commit -m "chore: release $version [skip ci]"
+            git pull --rebase origin master
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "tag v$version already exists; leaving it"
+          else
+            git tag "v$version"
+          fi
+          git push origin HEAD:master "refs/tags/v$version"
+
+      # NODE_AUTH_TOKEN is the secret when it exists and empty otherwise. An empty token makes
+      # npm fall back to trusted publishing (OIDC); --provenance needs id-token: write either way.
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -247,12 +247,37 @@ npm run demo:build     # static site in demo/dist-site/
 The demo is not part of the published package (it has its own `package.json`). CI builds it and deploys
 `demo/dist-site/` to GitHub Pages from `master`. See [demo/README.md](demo/README.md).
 
+## CI
+
+`.github/workflows/ci.yml` runs on pull requests to `dev` and `master` and on pushes to `dev`. It
+builds both flavours once, then runs `gen:check`, `check:bindings`, `npm test`, `npm run test:stock`,
+a check of the `npm pack` content, the demo build and the vecs test suites (physics, phaser-server,
+phaser) against the vecs commit pinned in `ci/vecs-ref`. The vecs repository is private: the suites
+need the `VECS_READ_TOKEN` secret and are skipped, with a warning, when it is missing.
+`.github/workflows/vecs-nightly.yml` runs the same suites against vecs's `dev` every night and opens
+a pull request that moves the pin when they pass. To run them yourself:
+
+```sh
+npm pack
+scripts/run-vecs-suites.sh <vecs-checkout> vworlds-box2d3-wasm-*.tgz
+```
+
+## Releasing
+
+Merge `dev` into `master`. `.github/workflows/publish.yml` builds, tests, and publishes
+`@vworlds/box2d3-wasm` to npm with provenance. If the version in `package.json` is not on npm yet it
+is released as is, otherwise the patch version is bumped (`scripts/release-version.mjs`, `--dry-run`
+shows the decision), committed to `master` with `[skip ci]` and tagged `v<version>`. For a minor or
+major release, set the version in `package.json` on `dev` first. `pages.yml` deploys the demo to
+GitHub Pages on the same push. [docs/releasing.md](docs/releasing.md) lists the one-time setup.
+
 ## Repository layout
 
 | path | contents |
 |---|---|
 | `src/` | `glue.cpp` (embind bindings), `fastpath.cpp` and `fastpath_body.gen.cpp` (`b2x_` exports), `fastpath.mjs` / `.d.ts` (helper), `entry.mjs` / `.d.ts` (flavour selection), `Box2D.template.d.ts` |
-| `scripts/` | `build.sh`, `build-in-docker.sh`, `Dockerfile`, `gen_fastpath.py`, `check_bindings.py`, `bindings-exceptions.txt`, `modify_emscripten_dts.awk` |
+| `scripts/` | `build.sh`, `build-in-docker.sh`, `Dockerfile`, `gen_fastpath.py`, `check_bindings.py`, `bindings-exceptions.txt`, `modify_emscripten_dts.awk`, `release-version.mjs` (+ test), `check-pack.mjs`, `run-vecs-suites.sh` |
+| `.github/`, `ci/` | workflows, the build action, `vecs-ref` (the pinned vecs commit) |
 | `patches/box2d/` | the patch applied to the Box2D submodule |
 | `box2d/` | Box2D (git submodule) |
 | `tests/` | differential and integration tests, `stock-differential/` |
@@ -265,6 +290,7 @@ The demo is not part of the published package (it has its own `package.json`). C
 - [docs/fastpath.md](docs/fastpath.md): the fast-path API.
 - [docs/vecs-migration.md](docs/vecs-migration.md): moving vecs-physics from embind to the fast path.
 - [docs/box2d-update.md](docs/box2d-update.md): what to do when moving the Box2D submodule.
+- [docs/releasing.md](docs/releasing.md): releases, CI secrets and the one-time repository setup.
 - [patches/README.md](patches/README.md): the Box2D patch.
 - [tests/stock-differential/README.md](tests/stock-differential/README.md): what the stock comparison proves.
 

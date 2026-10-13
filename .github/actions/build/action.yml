@@ -1,0 +1,37 @@
+name: Build dist
+description: Install emsdk and TypeScript 5, then run `npm run build` (both flavours, Release) in the checked-out repository.
+
+# The checkout (with submodules) must have happened before this action runs.
+# The emsdk version lives here, and only here. Changing it changes the simulation output:
+# see docs/box2d-update.md before touching it.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+
+    # Installs emsdk 4.0.18, activates it and puts emcc/emcmake/emmake on PATH. With
+    # actions-cache-folder the installed emsdk (including its downloaded toolchain) is restored
+    # from the Actions cache, keyed on the version and the OS.
+    - uses: mymindstorm/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
+      with:
+        version: "4.0.18"
+        actions-cache-folder: emsdk-cache
+
+    # emcc --emit-tsd breaks on TypeScript 6; scripts/Dockerfile pins the same 5.9 line.
+    - name: Install TypeScript 5
+      shell: bash
+      run: npm install --global typescript@5.9
+
+    - name: Install build tools
+      shell: bash
+      run: |
+        command -v cmake gawk make >/dev/null || sudo apt-get install -y --no-install-recommends cmake gawk make
+        tsc --version
+        emcc --version | head -1
+
+    - name: Build
+      shell: bash
+      run: npm run build

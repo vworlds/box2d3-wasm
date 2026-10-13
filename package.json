@@ -31,7 +31,9 @@
     "gen:check": "python3 scripts/gen_fastpath.py --check",
     "check:bindings": "python3 scripts/check_bindings.py",
     "demo:dev": "npm --prefix demo run dev",
-    "demo:build": "npm --prefix demo run build"
+    "demo:build": "npm --prefix demo run build",
+    "check:pack": "node scripts/check-pack.mjs",
+    "test:release": "node --test scripts/release-version.test.mjs"
   },
   "author": "Alex Birch & Erik Sombroek",
   "repository": {
