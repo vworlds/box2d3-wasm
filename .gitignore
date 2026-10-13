@@ -1,2 +1,4 @@
-# esmcripten cache location used by GitHub Actions
-/emsdk-cache/
+/build/
+/dist/
+/node_modules/
+*.tgz

@@ -427,7 +427,7 @@ B2X_API uint32_t b2x_Shape_GetUserData( int32_t index1, int32_t rev )
 
 // ---------------------------------------------------------------------------------------------
 // Composites: one crossing for a call sequence vecs makes today, in the same order. The rest of
-// the b2Body_* API is generated in fastpath_body.gen.cpp (tools/gen_fastpath.py).
+// the b2Body_* API is generated in fastpath_body.gen.cpp (scripts/gen_fastpath.py).
 
 // b2Body_SetTransform(id, {x, y}, b2Body_GetRotation(id)): move, keep the rotation.
 B2X_API void b2x_Body_SetPosition( int32_t index1, int32_t rev, float x, float y )

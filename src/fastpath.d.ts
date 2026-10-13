@@ -6,7 +6,7 @@ import type { FastPathBodyExports } from "./fastpath_body.gen";
 export type { FastPathBodyExports } from "./fastpath_body.gen";
 
 /**
- * The hand-written b2x_ exports (csrc/fastpath.cpp), typed by parameter name. All arguments and
+ * The hand-written b2x_ exports (src/fastpath.cpp), typed by parameter name. All arguments and
  * results are plain numbers: ids are packed (see {@link FastPath.world} and {@link FastPath.rev}),
  * pointers are byte addresses in wasm memory, floats cross as f32.
  */

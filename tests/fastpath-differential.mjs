@@ -1,19 +1,29 @@
 // Differential test: every value the b2x_ fast path exposes must equal (Object.is) what the
 // embind API returns for the same thing at the same moment. Box2D only, no vecs.
 //
-//   BOX2D_ENTRY=<entry.mjs> node perf/tests/fastpath-differential.mjs
-//   BOX2D_FLAVOUR_FILE=<.../compat/Box2D.compat.mjs> node perf/tests/fastpath-differential.mjs
+//   node tests/fastpath-differential.mjs [deluxe|compat]   # dist/<flavour>/Box2D.<flavour>.mjs
+//   node tests/fastpath-differential.mjs                   # dist/entry.mjs (picks a flavour itself)
+//   BOX2D_ENTRY=<entry.mjs> node tests/fastpath-differential.mjs
+//   BOX2D_FLAVOUR_FILE=<.../compat/Box2D.compat.mjs> node tests/fastpath-differential.mjs
+// Needs a built dist/ (npm run build or npm run build:docker).
 //
 // Exits non-zero on the first mismatch. Prints the number of values compared.
 import { cpus } from "node:os";
 import { resolve, dirname } from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
 globalThis.navigator ??= {};
 globalThis.navigator.hardwareConcurrency ??= cpus().length;
 
-const target = process.env.BOX2D_FLAVOUR_FILE ?? process.env.BOX2D_ENTRY;
-if (!target) throw new Error("set BOX2D_ENTRY or BOX2D_FLAVOUR_FILE");
+const dist = fileURLToPath(new URL("../dist/", import.meta.url));
+const flavourArg = process.argv[2];
+if (flavourArg && flavourArg !== "deluxe" && flavourArg !== "compat") {
+  throw new Error(`unknown flavour '${flavourArg}' (expected deluxe or compat)`);
+}
+if (flavourArg && !process.env.BOX2D_FLAVOUR_FILE && !process.env.BOX2D_ENTRY) {
+  process.env.BOX2D_FLAVOUR_FILE = resolve(dist, flavourArg, `Box2D.${flavourArg}.mjs`);
+}
+const target = process.env.BOX2D_FLAVOUR_FILE ?? process.env.BOX2D_ENTRY ?? resolve(dist, "entry.mjs");
 const { default: factory } = await import(pathToFileURL(resolve(target)).href);
 const fastpathFile = process.env.BOX2D_FLAVOUR_FILE
   ? resolve(dirname(resolve(target)), "..", "fastpath.mjs")
