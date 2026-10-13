@@ -76,11 +76,14 @@ jobs:
             git pull --rebase origin master
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            # A re-run after a failed publish: the tag is already on the remote and not in this
+            # checkout, so there is nothing to push for it.
             echo "tag v$version already exists; leaving it"
+            git push origin HEAD:master
           else
             git tag "v$version"
+            git push origin HEAD:master "refs/tags/v$version"
           fi
-          git push origin HEAD:master "refs/tags/v$version"
 
       # NODE_AUTH_TOKEN is the secret when it exists and empty otherwise. An empty token makes
       # npm fall back to trusted publishing (OIDC); --provenance needs id-token: write either way.
