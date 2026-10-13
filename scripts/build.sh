@@ -172,6 +172,7 @@ build_flavour() {
   rm -rf "$FLAVOUR_DIST"
   mkdir -p "$FLAVOUR_DIST"
   cp "$OUT_DIR/$BASENAME.mjs" "$OUT_DIR/$BASENAME.wasm" "$FLAVOUR_DIST/"
+  cp "$OUT_DIR"/*.map "$FLAVOUR_DIST/" 2>/dev/null || true # Debug and RelWithDebInfo only
   # replace emcc's `export default function MainModuleFactory` declaration with our template
   awk -f "$ROOT/scripts/modify_emscripten_dts.awk" -v template="$ROOT/src/Box2D.template.d.ts" \
     "$OUT_DIR/$BASENAME.d.ts" > "$FLAVOUR_DIST/$BASENAME.d.ts"
