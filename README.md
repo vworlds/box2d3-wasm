@@ -175,20 +175,67 @@ the same commit built at two different paths gives byte-identical files in `dist
 
 ```sh
 npm install        # once; fetches box2d3-wasm 5.2.0 for test:stock
-npm test           # fast-path differential test (both flavours) + integration test, on dist/
+npm test           # fast-path differential test + bindings test (both flavours) + integration test, on dist/
 npm run test:stock # step-by-step hashes equal to box2d3-wasm 5.2.0, embind and fast path
 npm run gen:check  # the generated fast-path code is current
+npm run check:bindings  # every C function is bound or excepted (see API coverage)
 ```
 
 `npm run gen` regenerates `src/fastpath_body.gen.cpp` and `src/fastpath_body.gen.d.ts` from
 `box2d/include/box2d/box2d.h`.
+
+## API coverage
+
+Rule: **every function of Box2D's public C API (the `B2_API` declarations in `box2d.h`, `types.h`,
+`collision.h`, `math_functions.h`, `base.h`) is callable through the flat embind API** under its C
+name, except the ones listed with a reason in
+[scripts/bindings-exceptions.txt](scripts/bindings-exceptions.txt). The fast path is an optional
+shortcut to some of them and does not count towards the rule.
+
+Today that is 397 of 428 declared functions bound; the 31 exceptions are:
+
+- debug draw (`b2World_Draw`, `b2DefaultDebugDraw`), removed on purpose;
+- allocator and assert hooks (`b2SetAllocator`, `b2SetAssertFcn`, `b2InternalAssertFcn`), which take
+  C function pointers;
+- `b2GetMillisecondsAndReset` (in/out `uint64_t*`; use `b2GetTicks` and `b2GetMilliseconds`),
+  `b2ShapeDistance` (needs the `b2DistanceInput`/`b2DistanceOutput`/`b2Simplex` value classes);
+- the 22 `b2DynamicTree_*` functions (a standalone broadphase tree with raw pointers and callbacks);
+- `b2World_DumpMemoryStats` (writes a file; the build has no file system, so the call throws);
+- `b2Chain_GetSurfaceMaterialCount` (declared in `box2d.h` but not defined in the pinned Box2D).
+
+Conventions for the awkward ones:
+
+- **User data** (`b2World_/b2Body_/b2Shape_/b2Joint_` `SetUserData`/`GetUserData`) is an unsigned
+  32-bit **integer** stored in the `void*`, not an object. It is the same storage as
+  `_b2x_Body_SetUserData` / `_b2x_Shape_SetUserData`, so both APIs see the same value; keep your own
+  table if you need to attach objects.
+- **Names**: `b2Body_SetName(id, string)` / `b2Body_GetName(id)` (Box2D keeps at most 31 characters).
+- **Out-parameters** come back as value objects: `b2Joint_GetConstraintTuning(id)` returns
+  `{hertz, dampingRatio}`, `b2DistanceJoint_GetSpringForceRange(id)` returns
+  `{lowerForce, upperForce}`.
+- **`uint64_t`** values (`b2Shape_SetUserMaterial`, `b2GetTicks`) are `BigInt`.
+- `b2ContactData` gained a `contactId` property, which `b2Contact_GetData` and `b2Contact_IsValid`
+  take.
+- Callbacks: bound are the world queries `b2World_OverlapAABB`, `b2World_OverlapShape`,
+  `b2World_CastRay`, `b2World_CastShape`, `b2World_CollideMover` (a JS function per call),
+  `b2World_SetCustomFilterCallback`, `b2World_SetPreSolveCallback` (free the returned handle with
+  `b2World_DeleteCallback`) and `b2World_SetFrictionCallback` / `b2World_SetRestitutionCallback`.
+  Not bound: the task system and the allocator/assert hooks above, and debug draw.
+
+`npm run check:bindings` enforces the rule. It parses the `B2_API` declarations (comments and
+preprocessor lines stripped, multi-line declarations handled) and the `function("...")` names in
+`src/*.cpp`, prints the totals per header, and exits 1 when a declared function is neither bound nor
+excepted, when an exception or a Box2D-looking binding names a function the headers no longer
+declare (so a Box2D update that removes or renames one is noticed), or when an exception is also
+bound. Lines starting with `+` in the exceptions file list package helpers that have no C twin
+(`b2Body_GetPointer`, ...). Run it after changing `glue.cpp` or moving the Box2D submodule.
 
 ## Repository layout
 
 | path | contents |
 |---|---|
 | `src/` | `glue.cpp` (embind bindings), `fastpath.cpp` and `fastpath_body.gen.cpp` (`b2x_` exports), `fastpath.mjs` / `.d.ts` (helper), `entry.mjs` / `.d.ts` (flavour selection), `Box2D.template.d.ts` |
-| `scripts/` | `build.sh`, `build-in-docker.sh`, `Dockerfile`, `gen_fastpath.py`, `modify_emscripten_dts.awk` |
+| `scripts/` | `build.sh`, `build-in-docker.sh`, `Dockerfile`, `gen_fastpath.py`, `check_bindings.py`, `bindings-exceptions.txt`, `modify_emscripten_dts.awk` |
 | `patches/box2d/` | the patch applied to the Box2D submodule |
 | `box2d/` | Box2D (git submodule) |
 | `tests/` | differential and integration tests, `stock-differential/` |

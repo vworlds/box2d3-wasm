@@ -276,8 +276,9 @@ Hand-written composites: one crossing for an exact call sequence.
 
 `_b2x_Body_SetUserData(index1, rev, u32)` / `_b2x_Body_GetUserData` and the `Shape` pair store an
 unsigned 32-bit integer in Box2D's `void* userData`. Box2D copies body user data into every move
-event, so `move.userData` carries it with no lookup. The embind glue never uses body or shape
-user data.
+event, so `move.userData` carries it with no lookup. The embind API exposes the same storage as
+`b2Body_SetUserData` / `b2Body_GetUserData` (and the shape, joint and world equivalents), also as an
+unsigned 32-bit integer, so `_b2x_Body_GetUserData` and `b2Body_GetUserData` return the same value.
 
 ## Profile timers
 
