@@ -1,0 +1,59 @@
+diff --git a/src/timer.c b/src/timer.c
+index 7e2e87c..74ae1f0 100644
+--- a/src/timer.c
++++ b/src/timer.c
+@@ -101,8 +101,32 @@ void b2UnlockMutex( b2Mutex* m )
+ #include <sched.h>
+ #include <time.h>
+ 
++#if defined( __EMSCRIPTEN__ )
++// box2d3-wasm: each clock read is a call out to JavaScript (performance.now), made many times per
++// step for b2World_GetProfile. The timers never influence simulation results, so they can be
++// switched off at runtime; b2World_GetProfile then reports zeros. On by default.
++static bool b2_profileTimers = true;
++
++void b2SetProfileTimers( bool enabled )
++{
++	b2_profileTimers = enabled;
++}
++
++bool b2GetProfileTimers( void )
++{
++	return b2_profileTimers;
++}
++#define B2_PROFILE_TIMERS_OFF ( b2_profileTimers == false )
++#else
++#define B2_PROFILE_TIMERS_OFF false
++#endif
++
+ uint64_t b2GetTicks( void )
+ {
++	if ( B2_PROFILE_TIMERS_OFF )
++	{
++		return 0;
++	}
+ 	struct timespec ts;
+ 	clock_gettime( CLOCK_MONOTONIC, &ts );
+ 	return ts.tv_sec * 1000000000LL + ts.tv_nsec;
+@@ -110,12 +134,21 @@ uint64_t b2GetTicks( void )
+ 
+ float b2GetMilliseconds( uint64_t ticks )
+ {
++	if ( B2_PROFILE_TIMERS_OFF )
++	{
++		return 0.0f;
++	}
+ 	uint64_t ticksNow = b2GetTicks();
+ 	return (float)( ( ticksNow - ticks ) / 1000000.0 );
+ }
+ 
+ float b2GetMillisecondsAndReset( uint64_t* ticks )
+ {
++	if ( B2_PROFILE_TIMERS_OFF )
++	{
++		*ticks = 0;
++		return 0.0f;
++	}
+ 	uint64_t ticksNow = b2GetTicks();
+ 	float ms = (float)( ( ticksNow - *ticks ) / 1000000.0 );
+ 	*ticks = ticksNow;

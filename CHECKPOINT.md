@@ -9,7 +9,7 @@ box2d3-wasm **5.2.0** (`ee2a63b`). Reference consumer: `vworlds/vecs` (read-only
 | --- | --- |
 | 1. Setup and baseline | **done** (BREAKPOINT A) |
 | 2. Plan and API design | **done** (BREAKPOINT B) |
-| 3. Iterate | not started |
+| 3. Iterate | **in progress**: R1 done, R2–R4 implemented (see "Phase 3 rounds") |
 | 4. Final analysis | not started |
 
 Hard rule for every later phase: results stay bit-identical to stock 5.2.0. Proof per build: the
@@ -510,6 +510,153 @@ worktree (based on `2d58dd7`, never pushed). Call sites in migration order:
 - Stale typed views after memory growth are the main correctness hazard of the new API. They are
   covered by the documented rule, `fp.sync()`, and a forced-growth phase in the differential test
   on both flavours.
+
+---
+
+## Phase 3 rounds
+
+Setup used by every round (all local, never pushed to vecs):
+
+- `../vecs-stock`: vecs `2d58dd7`, unmodified, built. Proves the embind API still works on fork builds.
+- `../vecs-scratch`: vecs `2d58dd7` + the scratch adapter on local branch `scratch/fork-adapter`.
+  One commit per round; the same commits are exported to `perf/adapter/*.patch` in this repo
+  (`git am` them onto `2d58dd7` to rebuild it).
+- Each checkout has its own `node_modules` whose `box2d3-wasm` entry is a symlink
+  (`/home/user/pkg/<checkout>/build/dist/es` → a build dir), so vitest runs against any build.
+- `perf/prove.sh <build>` is the proof kit: the differential test on deluxe and compat, the 7
+  checksums with the scratch adapter and with unmodified vecs, and the 3 vecs suites in both
+  checkouts.
+- Round timings: `perf/bench/run.mjs`, 5 alternating rounds, fresh process per run, medians;
+  `perf/bench/summarize.py` prints the tables below.
+
+### Round 1: fast-path foundation, bulk move export, raw step
+
+Fork (`box2d3-wasm/`):
+
+- `csrc/fastpath.cpp`:
+  - packed ids;
+  - layout JSON generated from `sizeof`/`offsetof`, with alignment `static_assert`s;
+  - `b2x_World_Step`, `b2x_World_GetMoveCount`, `b2x_World_ExportMoves` (48-byte record: index,
+    rev, user data, flags, x, y, c, s, angle, vx, vy, w), `b2x_World_StepAndExportMoves`,
+    `b2x_World_GetMoveEventSpan`, `b2x_World_GetContactSpans`, `b2x_World_GetSensorSpans`;
+  - integer user data for bodies and shapes.
+- `shell/1_build_wasm.sh`: compiles it, exports `wasmMemory`, `HEAPF32`, `HEAP32`.
+- `src/fastpath.mjs` + `.d.ts`: `createFastPath(module)` with layout, views, `sync()`, id
+  packing, `alloc`/`free`, and a growable `MoveExporter`. Exposed as package export
+  `box2d3-wasm/fastpath`.
+- `perf/tests/fastpath-differential.mjs`: every exported field against its embind twin,
+  every body, every step (drift and contact/hit/sensor scenes, dynamic-only filter, fused call,
+  raw vs embind step on twin worlds, forced memory growth). **4,205,896 values equal, on deluxe
+  (shared memory) and compat (non-shared)**, with 3,394 contact begins, 2,975 ends, 1,564 hits
+  and 635 sensor events in the comparison.
+
+Scratch adapter: `core/step.ts` → `_b2x_World_Step`; `body/pose_out.ts` → one
+`exportMoves` per step plus a typed-array loop (same order, same lookups, same
+compare-before-write). Two tests that counted pose-out's embind handles now assert the new
+contract: one export per tick, zero embind body-event or velocity calls, components equal to
+the embind getters.
+
+Proof: 7/7 checksums identical (scratch adapter and unmodified vecs). vecs suites:
+vecs-physics 536/536, vecs-phaser-server 154/154 (incl. `motion_accuracy.test.ts`),
+vecs-phaser 119/119, in both checkouts.
+
+Timing, stock vs R1, same session, 5 alternating rounds (ns per body per step):
+
+| scene | copy-out stock → R1 | × | step | events | whole tick stock → R1 | × | tick spread R1 | alloc B/body/step (R1) | checksums |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| drift500 | 6568 → 530 | 12.4× | 226 → 199 | 38 → 34 | 6871 → 794 | **8.7×** | 28% | 421.6 | 11c76fa7 (same) |
+| drift2000 | 7879 → 760 | 10.4× | 247 → 183 | 26 → 14 | 8171 → 962 | **8.5×** | 19% | 394.3 | a66a94ee (same) |
+| drift10000 | 7605 → 1515 | 5.0× | 256 → 257 | 8 → 10 | 7870 → 1789 | **4.4×** | 35% | 385.4 | 70623967 (same) |
+| contact | 7823 → 940 | 8.3× | 1914 → 1792 | 350 → 285 | 10134 → 3096 | **3.3×** | 9% | 911.7 | 5db7f953 (same) |
+| worlds25x19 | 6591 → 795 | 8.3× | 976 → 901 | 245 → 239 | 8526 → 2493 | **3.4×** | 12% | 1035.7 | a8a0671e (same) |
+| rest2000 | 6229 → 242 | 25.7× | 135 → 96 | 18 → 12 | 6411 → 361 | **17.8×** | 16% | 8.4 | 17fc310b (same) |
+| drive500 | 7131 → 946 | 7.5× | 558 → 567 | 53 → 48 | 9210 → 3077 | **3.0×** | 11% | 1515.1 | fd7cc876 (same) |
+
+Stock allocated 3,306–4,877 B/body/step; R1 allocates 385–420 B on the drift scenes (vecs
+`entity.set`) and 8.4 B in rest2000 (no writes; R2 removes the known per-step sources).
+
+R1 profile (`perf/results/profiles/r1-*.txt`):
+- **drift10000:** embind is gone (0.6%). **vecs is 71.5%**: `entity.get` 29.5% and the deferred
+  `_executeCommand` flush 26.3%. `entity.get(Class)` resolves the class to its component entity
+  on every call (`world.entity(ref).eid`) before the map lookup, and its cost per body grows
+  with entity count, which is why drift10000 sits at 5.0× copy-out.
+- **worlds25x19:** the profile-timer chain (`_clock_time_get`, `now`, `bigintToI53Checked`,
+  `get buffer`, `_emscripten_get_now`, `growMemViews`) is ~18%, vecs's per-world system overhead
+  (`system.js` `_run` and callback wrapper, `progress`) ~14%, and the embind event headers in
+  `PhysicsEvents` ~4% + `makeClassHandle` 3.5%.
+
+Re-plan: an adapter-side round "numeric component ids for `entity.get`/`set`" is added after
+R4 (it is the largest remaining cost on big worlds and is semantics-preserving: `get` accepts a
+numeric id).
+
+**Stop-rule interpretation.** A round counts as a gain when the whole tick of at least one scene
+improves by ≥ 5% (same-session medians against the previous round). The loop stops after two
+consecutive rounds with no scene ≥ 5%.
+
+### Round 2: contact, hit and sensor events from zero-copy spans
+
+Fork: nothing new (the spans shipped in R1). Builds from here on are `fork-r4` (all C for
+R2–R4 plus the timer patch); with the switch at its default it behaves like R1.
+
+Scratch adapter: `events/publish.ts` reads begin/end/hit and sensor begin/end records in place
+(one `b2x_World_Get*Spans` call each, in the same order: begins, ends, hits, then sensor
+begins, ends). It does the same `entityByShapeIndex` lookups and liveness checks, and the hit
+point/normal/speed are the same f32 values. The three per-step `Set`s are allocated once and
+reused. The handle test now asserts that events still arrive (contact begin/end, hit, sensor on
+either sensor shape; checked identical on unmodified vecs) with zero embind event calls.
+
+Proof: `perf/prove.sh fork-r4` passes (differential on both flavours, 14/14 checksums, 6/6 suite
+runs). Timing R1 → R2 (both on fork-r4):
+
+| scene | copy-out r1 → r2 | × | step r1 → r2 | events | whole tick r1 → r2 | × | tick spread r2 | alloc B/body/step (r2) | checksums |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| drift500 | 576 → 623 | 0.9× | 200 → 203 | 34 → 10 | 842 → 881 | **1.0×** | 18% | 415.1 | 11c76fa7 (same) |
+| drift2000 | 772 → 730 | 1.1× | 190 → 187 | 14 → 4 | 987 → 935 | **1.1×** | 15% | 394.1 | a66a94ee (same) |
+| drift10000 | 1424 → 1490 | 1.0× | 258 → 255 | 9 → 3 | 1699 → 1762 | **1.0×** | 19% | 385.3 | 70623967 (same) |
+| contact | 1278 → 1243 | 1.0× | 1910 → 1898 | 332 → 140 | 3511 → 3358 | **1.0×** | 34% | 845.7 | 5db7f953 (same) |
+| worlds25x19 | 754 → 768 | 1.0× | 894 → 882 | 240 → 40 | 2504 → 2298 | **1.1×** | 12% | 912.4 | a8a0671e (same) |
+| rest2000 | 269 → 305 | 0.9× | 99 → 107 | 12 → 4 | 393 → 436 | **0.9×** | 23% | 10.2 | 17fc310b (same) |
+| drive500 | 978 → 1005 | 1.0× | 538 → 556 | 50 → 13 | 3088 → 3110 | **1.0×** | 15% | 1509.5 | fd7cc876 (same) |
+
+Events cost 332 → 140 ns/body (contact) and 240 → 40 (worlds25x19). Whole tick: worlds25x19
+**−8.2%** and contact −4.4%, so this is a gaining round. The drift and rest scenes have no events,
+and their copy-out code is identical between R1 and R2: those ±10% moves are noise.
+
+Allocation hunt: a sampling heap profile with collected objects included (`BENCH_HEAP_SAMPLE`,
+`perf/bench/heap-sites.py`) shows that rest2000's remaining ~15 KB/step is **per step, not
+per body**:
+- vecs's system runner and pipeline iteration: ~7.7 KB;
+- Box2D's timer clock path (BigInt conversions): ~3.1 KB;
+- harness instrumentation: ~1 KB;
+- adapter iterators over empty queues and maps: ~0.8 KB;
+- `writePose`: 0.26 B/body.
+
+### Round 3: Box2D profile timers off; no iteration of empty collections
+
+Fork: `patches/box2d/0001-runtime-switch-for-profile-timers.patch` (applied by
+`0_build_makefile.sh`; `patches/README.md`), `b2x_SetProfileTimers` / `b2x_GetProfileTimers`.
+Default on.
+
+Scratch adapter: the fast path turns the timers off at preload. The reaper, impulse drains and
+`PhysicsEvents` set passes return early when their collection is empty (each `for…of` allocates
+an iterator).
+
+Proof: `perf/prove.sh fork-r4` passes. Timing R2 → R3:
+
+| scene | copy-out r2 → r3 | × | step r2 → r3 | events | whole tick r2 → r3 | × | tick spread r3 | alloc B/body/step (r3) | checksums |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| drift500 | 608 → 533 | 1.1× | 207 → 170 | 9 → 9 | 852 → 742 | **1.1×** | 27% | 406.3 | 11c76fa7 (same) |
+| drift2000 | 729 → 753 | 1.0× | 189 → 182 | 4 → 5 | 934 → 958 | **1.0×** | 27% | 393.6 | a66a94ee (same) |
+| drift10000 | 1375 → 1363 | 1.0× | 256 → 241 | 3 → 3 | 1647 → 1612 | **1.0×** | 28% | 385.3 | 70623967 (same) |
+| contact | 1140 → 1208 | 0.9× | 1831 → 1834 | 140 → 135 | 3142 → 3228 | **1.0×** | 8% | 839.9 | 5db7f953 (same) |
+| worlds25x19 | 767 → 736 | 1.0× | 899 → 225 | 42 → 37 | 2298 → 1538 | **1.5×** | 5% | 690.6 | a8a0671e (same) |
+| rest2000 | 280 → 272 | 1.0× | 94 → 89 | 4 → 4 | 390 → 372 | **1.0×** | 14% | 5.0 | 17fc310b (same) |
+| drive500 | 988 → 980 | 1.0× | 549 → 515 | 13 → 13 | 3032 → 3037 | **1.0×** | 16% | 1500.2 | fd7cc876 (same) |
+
+worlds25x19: step **899 → 225 ns/body**, whole tick **−33%**. That matches the Phase 2 finding
+(~70% of a small-world step was the timers). Single-world scenes move within noise; their
+timers cost ~5 ns/body. rest2000 allocates 5.0 B/body/step, all of it fixed per-step bytes
+(vecs core and the harness).
 
 ## Next steps (Phase 3, after go-ahead)
 

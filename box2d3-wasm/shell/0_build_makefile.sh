@@ -41,6 +41,19 @@ case "$FLAVOUR" in
     ;;
 esac
 
+# box2d3-wasm patches against the Box2D submodule (see patches/README.md). Idempotent: a patch that
+# already applies in reverse is already in place.
+PATCH_DIR="$DIR/../patches/box2d"
+for patch in "$PATCH_DIR"/*.patch; do
+  [ -e "$patch" ] || continue
+  if git -C "$BOX2D_DIR" apply --reverse --check "$patch" 2>/dev/null; then
+    >&2 echo "patch already applied: $(basename "$patch")"
+  else
+    git -C "$BOX2D_DIR" apply "$patch"
+    >&2 echo "applied patch: $(basename "$patch")"
+  fi
+done
+
 >&2 echo -e '\nGenerating Makefile with emcmake'
 
 case "$TARGET_TYPE" in

@@ -43,6 +43,9 @@ registerHooks({
     if (box2dEntry !== undefined && specifier === "box2d3-wasm") {
       return { url: box2dEntry, shortCircuit: true };
     }
+    if (box2dEntry !== undefined && specifier === "box2d3-wasm/fastpath") {
+      return { url: new URL("fastpath.mjs", box2dEntry).href, shortCircuit: true };
+    }
     return nextResolve(specifier, context);
   },
 });

@@ -1,0 +1,142 @@
+r0 drift500     r2         tick 828.9 pose 570.9 step 213.7 alloc -1 11c76fa7
+r0 drift500     r3         tick 742.4 pose 534.4 step 167.4 alloc -1 11c76fa7
+r0 drift2000    r2         tick 933.5 pose 722.2 step 192.9 alloc -1 a66a94ee
+r0 drift2000    r3         tick 958 pose 753.1 step 182 alloc -1 a66a94ee
+r0 drift10000   r2         tick 1630.6 pose 1369.2 step 251 alloc -1 70623967
+r0 drift10000   r3         tick 1612.3 pose 1363 step 241.1 alloc -1 70623967
+r0 contact      r2         tick 3037.8 pose 1137.9 step 1751.5 alloc -1 5db7f953
+r0 contact      r3         tick 3332.2 pose 1259.2 step 1893.4 alloc -1 5db7f953
+r0 worlds25x19  r2         tick 2298.1 pose 751.5 step 899.4 alloc -1 a8a0671e
+r0 worlds25x19  r3         tick 1487.3 pose 699.7 step 218.8 alloc -1 a8a0671e
+r0 rest2000     r2         tick 393.3 pose 280.3 step 96.9 alloc -1 17fc310b
+r0 rest2000     r3         tick 392.6 pose 289.2 step 90.2 alloc -1 17fc310b
+r0 drive500     r2         tick 3142.7 pose 1025.3 step 548.6 alloc -1 fd7cc876
+r0 drive500     r3         tick 2758.5 pose 853 step 496.9 alloc -1 fd7cc876
+r1 drift2000    r3         tick 879.5 pose 694.8 step 169.4 alloc -1 a66a94ee
+r1 drift2000    r2         tick 932 pose 731.2 step 185.6 alloc -1 a66a94ee
+r1 drift10000   r3         tick 1449.7 pose 1200.3 step 240.2 alloc -1 70623967
+r1 drift10000   r2         tick 1600.3 pose 1334.3 step 255.9 alloc -1 70623967
+r1 contact      r3         tick 3074.6 pose 1147.1 step 1786.2 alloc -1 5db7f953
+r1 contact      r2         tick 2904.2 pose 1063.1 step 1698.7 alloc -1 5db7f953
+r1 worlds25x19  r3         tick 1538.2 pose 753.1 step 222.9 alloc -1 a8a0671e
+r1 worlds25x19  r2         tick 2239.1 pose 767.1 step 843.2 alloc -1 a8a0671e
+r1 rest2000     r3         tick 389.7 pose 280.6 step 93.1 alloc -1 17fc310b
+r1 rest2000     r2         tick 426.1 pose 306.3 step 104.2 alloc -1 17fc310b
+r1 drive500     r3         tick 2906.6 pose 963.7 step 500.1 alloc -1 fd7cc876
+r1 drive500     r2         tick 2962.5 pose 993.6 step 546 alloc -1 fd7cc876
+r1 drift500     r3         tick 716 pose 510.4 step 167.8 alloc -1 11c76fa7
+r1 drift500     r2         tick 896.8 pose 641.5 step 207.1 alloc -1 11c76fa7
+r2 drift10000   r2         tick 1820.7 pose 1539.7 step 270.3 alloc -1 70623967
+r2 drift10000   r3         tick 1752.7 pose 1474.2 step 268.8 alloc -1 70623967
+r2 contact      r2         tick 3338.7 pose 1235.4 step 1916.3 alloc -1 5db7f953
+r2 contact      r3         tick 3167.2 pose 1208.1 step 1803.3 alloc -1 5db7f953
+r2 worlds25x19  r2         tick 2436.7 pose 796.9 step 959.1 alloc -1 a8a0671e
+r2 worlds25x19  r3         tick 1518.3 pose 706.3 step 230.1 alloc -1 a8a0671e
+r2 rest2000     r2         tick 340.3 pose 231.9 step 93.8 alloc -1 17fc310b
+r2 rest2000     r3         tick 372.2 pose 272.4 step 86.9 alloc -1 17fc310b
+r2 drive500     r2         tick 3031.9 pose 935 step 559.1 alloc -1 fd7cc876
+r2 drive500     r3         tick 3036.7 pose 979.6 step 516.8 alloc -1 fd7cc876
+r2 drift500     r2         tick 914.4 pose 650.8 step 213.9 alloc -1 11c76fa7
+r2 drift500     r3         tick 742.4 pose 533 step 170 alloc -1 11c76fa7
+r2 drift2000    r2         tick 1115.5 pose 881.3 step 215.2 alloc -1 a66a94ee
+r2 drift2000    r3         tick 1113.9 pose 886.8 step 205.7 alloc -1 a66a94ee
+r3 contact      r3         tick 3227.9 pose 1174.1 step 1889.5 alloc -1 5db7f953
+r3 contact      r2         tick 3463.6 pose 1335.4 step 1940.4 alloc -1 5db7f953
+r3 worlds25x19  r3         tick 1565.5 pose 757.5 step 229.2 alloc -1 a8a0671e
+r3 worlds25x19  r2         tick 2506 pose 820 step 979.5 alloc -1 a8a0671e
+r3 rest2000     r3         tick 354 pose 250.5 step 88.8 alloc -1 17fc310b
+r3 rest2000     r2         tick 347.8 pose 241.4 step 91 alloc -1 17fc310b
+r3 drive500     r3         tick 3208.3 pose 1061.6 step 531.5 alloc -1 fd7cc876
+r3 drive500     r2         tick 3132.3 pose 988.1 step 570.4 alloc -1 fd7cc876
+r3 drift500     r3         tick 909.3 pose 672.1 step 187 alloc -1 11c76fa7
+r3 drift500     r2         tick 852.3 pose 607.5 step 199.8 alloc -1 11c76fa7
+r3 drift2000    r3         tick 911.6 pose 724.3 step 171.9 alloc -1 a66a94ee
+r3 drift2000    r2         tick 922.4 pose 715.9 step 189.2 alloc -1 a66a94ee
+r3 drift10000   r3         tick 1558.5 pose 1308.7 step 240.5 alloc -1 70623967
+r3 drift10000   r2         tick 1653.4 pose 1390.6 step 253.7 alloc -1 70623967
+r4 worlds25x19  r2         tick 2256.4 pose 746 step 857.6 alloc -1 a8a0671e
+r4 worlds25x19  r3         tick 1543.1 pose 736.1 step 225.4 alloc -1 a8a0671e
+r4 rest2000     r2         tick 389.7 pose 280.1 step 93.8 alloc -1 17fc310b
+r4 rest2000     r3         tick 345 pose 243.1 step 87.3 alloc -1 17fc310b
+r4 drive500     r2         tick 2832.7 pose 912 step 513.6 alloc -1 fd7cc876
+r4 drive500     r3         tick 3051.8 pose 981.1 step 515.4 alloc -1 fd7cc876
+r4 drift500     r2         tick 806.6 pose 559.8 step 201.3 alloc -1 11c76fa7
+r4 drift500     r3         tick 733.9 pose 522.3 step 172.9 alloc -1 11c76fa7
+r4 drift2000    r2         tick 933.7 pose 728.8 step 188 alloc -1 a66a94ee
+r4 drift2000    r3         tick 1026.5 pose 813 step 193.5 alloc -1 a66a94ee
+r4 drift10000   r2         tick 1647.2 pose 1375.2 step 260.7 alloc -1 70623967
+r4 drift10000   r3         tick 1848.5 pose 1587.4 step 252 alloc -1 70623967
+r4 contact      r2         tick 3142.1 pose 1139.5 step 1830.8 alloc -1 5db7f953
+r4 contact      r3         tick 3227.8 pose 1228.6 step 1833.8 alloc -1 5db7f953
+
+scene        variant     metric   median     min       max     spread  checksums
+drift500     r2         tickNs      852.3     806.6     914.4   13.4%  11c76fa7
+drift500     r2         poseNs      607.5     559.8     650.8   16.3%  
+drift500     r2         stepNs      207.1     199.8     213.9    7.1%  
+drift500     r2         eventsNs      9.4       8.8      10.1   14.8%  
+drift500     r2         otherNs      34.6      33.9      38.0   12.1%  
+drift500     r3         tickNs      742.4     716.0     909.3   27.0%  11c76fa7
+drift500     r3         poseNs      533.0     510.4     672.1   31.7%  
+drift500     r3         stepNs      170.0     167.4     187.0   11.7%  
+drift500     r3         eventsNs      8.9       8.4      11.5   36.9%  
+drift500     r3         otherNs      28.8      27.3      36.7   34.4%  
+drift2000    r2         tickNs      933.5     922.4    1115.5   20.9%  a66a94ee
+drift2000    r2         poseNs      728.8     715.9     881.3   23.1%  
+drift2000    r2         stepNs      189.2     185.6     215.2   15.9%  
+drift2000    r2         eventsNs      4.0       4.0       5.0   25.0%  
+drift2000    r2         otherNs      12.9      10.8      13.8   27.8%  
+drift2000    r3         tickNs      958.0     879.5    1113.9   26.7%  a66a94ee
+drift2000    r3         poseNs      753.1     694.8     886.8   27.6%  
+drift2000    r3         stepNs      182.0     169.4     205.7   21.4%  
+drift2000    r3         eventsNs      4.7       4.1       6.4   56.1%  
+drift2000    r3         otherNs      14.2      10.4      17.7   70.2%  
+drift10000   r2         tickNs     1647.2    1600.3    1820.7   13.8%  70623967
+drift10000   r2         poseNs     1375.2    1334.3    1539.7   15.4%  
+drift10000   r2         stepNs      255.9     251.0     270.3    7.7%  
+drift10000   r2         eventsNs      3.2       3.0       3.3   10.0%  
+drift10000   r2         otherNs       7.1       5.7       7.8   36.8%  
+drift10000   r3         tickNs     1612.3    1449.7    1848.5   27.5%  70623967
+drift10000   r3         poseNs     1363.0    1200.3    1587.4   32.3%  
+drift10000   r3         stepNs      241.1     240.2     268.8   11.9%  
+drift10000   r3         eventsNs      2.8       2.6       3.4   30.8%  
+drift10000   r3         otherNs       6.1       5.3       6.3   18.9%  
+contact      r2         tickNs     3142.1    2904.2    3463.6   19.3%  5db7f953
+contact      r2         poseNs     1139.5    1063.1    1335.4   25.6%  
+contact      r2         stepNs     1830.8    1698.7    1940.4   14.2%  
+contact      r2         eventsNs    139.9     118.4     155.8   31.6%  
+contact      r2         otherNs      30.3      23.1      32.1   39.0%  
+contact      r3         tickNs     3227.8    3074.6    3332.2    8.4%  5db7f953
+contact      r3         poseNs     1208.1    1147.1    1259.2    9.8%  
+contact      r3         stepNs     1833.8    1786.2    1893.4    6.0%  
+contact      r3         eventsNs    135.1     118.4     145.9   23.2%  
+contact      r3         otherNs      25.8      22.0      32.2   46.4%  
+worlds25x19  r2         tickNs     2298.1    2239.1    2506.0   11.9%  a8a0671e
+worlds25x19  r2         poseNs      767.1     746.0     820.0    9.9%  
+worlds25x19  r2         stepNs      899.4     843.2     979.5   16.2%  
+worlds25x19  r2         eventsNs     41.5      39.1      44.3   13.3%  
+worlds25x19  r2         otherNs     579.3     554.1     627.2   13.2%  
+worlds25x19  r3         tickNs     1538.2    1487.3    1565.5    5.3%  a8a0671e
+worlds25x19  r3         poseNs      736.1     699.7     757.5    8.3%  
+worlds25x19  r3         stepNs      225.4     218.8     230.1    5.2%  
+worlds25x19  r3         eventsNs     37.3      35.8      38.7    8.1%  
+worlds25x19  r3         otherNs     505.4     491.4     509.5    3.7%  
+rest2000     r2         tickNs      389.7     340.3     426.1   25.2%  17fc310b
+rest2000     r2         poseNs      280.1     231.9     306.3   32.1%  
+rest2000     r2         stepNs       93.8      91.0     104.2   14.5%  
+rest2000     r2         eventsNs      3.5       3.3       3.9   18.2%  
+rest2000     r2         otherNs      11.5      10.7      11.8   10.3%  
+rest2000     r3         tickNs      372.2     345.0     392.6   13.8%  17fc310b
+rest2000     r3         poseNs      272.4     243.1     289.2   19.0%  
+rest2000     r3         stepNs       88.8      86.9      93.1    7.1%  
+rest2000     r3         eventsNs      3.6       3.3       3.7   12.1%  
+rest2000     r3         otherNs      10.4       9.1      11.6   27.5%  
+drive500     r2         tickNs     3031.9    2832.7    3142.7   10.9%  fd7cc876
+drive500     r2         poseNs      988.1     912.0    1025.3   12.4%  
+drive500     r2         stepNs      548.6     513.6     570.4   11.1%  
+drive500     r2         eventsNs     12.7      11.1      13.7   23.4%  
+drive500     r2         otherNs      49.3      47.9      52.0    8.6%  
+drive500     r3         tickNs     3036.7    2758.5    3208.3   16.3%  fd7cc876
+drive500     r3         poseNs      979.6     853.0    1061.6   24.5%  
+drive500     r3         stepNs      515.4     496.9     531.5    7.0%  
+drive500     r3         eventsNs     12.9      11.7      14.5   23.9%  
+drive500     r3         otherNs      47.1      38.4      50.5   31.5%  

@@ -1,0 +1,169 @@
+From fc11e83c681e5a830de59991bcfba8c0a1bd8d22 Mon Sep 17 00:00:00 2001
+From: scratch <jm@peletier.com>
+Date: Tue, 13 Oct 2026 00:09:02 +0000
+Subject: [PATCH 3/4] perf: scratch adapter R3 - profile timers off, no
+ iteration of empty queues (local only)
+
+---
+ lib/vecs-physics/src/adapter/runtime.ts |  3 ++
+ lib/vecs-physics/src/core/reaper.ts     | 38 +++++++++++++++----------
+ lib/vecs-physics/src/events/publish.ts  | 15 ++++++++++
+ lib/vecs-physics/src/forces/impulses.ts |  7 +++++
+ 4 files changed, 48 insertions(+), 15 deletions(-)
+
+diff --git a/lib/vecs-physics/src/adapter/runtime.ts b/lib/vecs-physics/src/adapter/runtime.ts
+index b794795..9ccf2a0 100644
+--- a/lib/vecs-physics/src/adapter/runtime.ts
++++ b/lib/vecs-physics/src/adapter/runtime.ts
+@@ -33,6 +33,9 @@ export async function preloadPhysics(): Promise<void> {
+   modulePromise = Box2DFactory().then((loadedModule) => {
+     module = loadedModule;
+     fastPath = createFastPath(loadedModule);
++    // Box2D's profile timers read a clock (a JavaScript call) per timed section of every step,
++    // only to fill b2World_GetProfile, which vecs never reads. They never affect results.
++    fastPath.setProfileTimers(false);
+     initializeScratchPools(loadedModule);
+     return loadedModule;
+   });
+diff --git a/lib/vecs-physics/src/core/reaper.ts b/lib/vecs-physics/src/core/reaper.ts
+index fe5df73..68173fc 100644
+--- a/lib/vecs-physics/src/core/reaper.ts
++++ b/lib/vecs-physics/src/core/reaper.ts
+@@ -18,32 +18,40 @@ export class PhysicsReaperModule extends Module {
+         // with b2Joint_IsValid because a joint queued from a cascaded body entity
+         // may already be gone.
+         const joints = engine.pendingJointDestroys;
+-        for (const jointId of joints) {
+-          if (engine.box2d.b2Joint_IsValid(jointId)) {
+-            engine.box2d.b2DestroyJoint(jointId, true);
++        if (joints.length > 0) {
++          for (const jointId of joints) {
++            if (engine.box2d.b2Joint_IsValid(jointId)) {
++              engine.box2d.b2DestroyJoint(jointId, true);
++            }
+           }
++          joints.length = 0;
+         }
+-        joints.length = 0;
+ 
+         const shapes = engine.pendingShapeDestroys;
+-        for (const shapeId of shapes) {
+-          engine.entityByShapeIndex.delete(shapeId.index1);
+-          engine.box2d.b2DestroyShape(shapeId, true);
++        if (shapes.length > 0) {
++          for (const shapeId of shapes) {
++            engine.entityByShapeIndex.delete(shapeId.index1);
++            engine.box2d.b2DestroyShape(shapeId, true);
++          }
++          shapes.length = 0;
+         }
+-        shapes.length = 0;
+ 
+         const chains = engine.pendingChainDestroys;
+-        for (const chainId of chains) {
+-          engine.box2d.b2DestroyChain(chainId);
++        if (chains.length > 0) {
++          for (const chainId of chains) {
++            engine.box2d.b2DestroyChain(chainId);
++          }
++          chains.length = 0;
+         }
+-        chains.length = 0;
+ 
+         const bodies = engine.pendingBodyDestroys;
+-        for (const bodyId of bodies) {
+-          engine.entityByBodyIndex.delete(bodyId.index1);
+-          engine.box2d.b2DestroyBody(bodyId);
++        if (bodies.length > 0) {
++          for (const bodyId of bodies) {
++            engine.entityByBodyIndex.delete(bodyId.index1);
++            engine.box2d.b2DestroyBody(bodyId);
++          }
++          bodies.length = 0;
+         }
+-        bodies.length = 0;
+       })
+       .add(PhysicsSystemTag);
+   }
+diff --git a/lib/vecs-physics/src/events/publish.ts b/lib/vecs-physics/src/events/publish.ts
+index 11ad0c1..28e9506 100644
+--- a/lib/vecs-physics/src/events/publish.ts
++++ b/lib/vecs-physics/src/events/publish.ts
+@@ -254,6 +254,9 @@ function clearSet(set: Set<EID>): void {
+ 
+ function copySet(target: Set<EID>, source: Set<EID>): void {
+   clearSet(target);
++  if (source.size === 0) {
++    return;
++  }
+   for (const eid of source) {
+     target.add(eid);
+   }
+@@ -328,6 +331,9 @@ function markModified<T extends object>(
+   touched: Set<EID>,
+   component: new () => T
+ ): void {
++  if (touched.size === 0) {
++    return;
++  }
+   for (const entityId of touched) {
+     world.getEntity(entityId)?.modified(component);
+   }
+@@ -338,6 +344,9 @@ function clearUntouchedContactEvents(
+   previouslyTouched: Set<EID>,
+   touched: Set<EID>
+ ): void {
++  if (previouslyTouched.size === 0) {
++    return;
++  }
+   for (const entityId of previouslyTouched) {
+     if (touched.has(entityId)) {
+       continue;
+@@ -355,6 +364,9 @@ function clearUntouchedSensorEvents(
+   previouslyTouched: Set<EID>,
+   touched: Set<EID>
+ ): void {
++  if (previouslyTouched.size === 0) {
++    return;
++  }
+   for (const entityId of previouslyTouched) {
+     if (touched.has(entityId)) {
+       continue;
+@@ -372,6 +384,9 @@ function clearUntouchedHitEvents(
+   previouslyTouched: Set<EID>,
+   touched: Set<EID>
+ ): void {
++  if (previouslyTouched.size === 0) {
++    return;
++  }
+   for (const entityId of previouslyTouched) {
+     if (touched.has(entityId)) {
+       continue;
+diff --git a/lib/vecs-physics/src/forces/impulses.ts b/lib/vecs-physics/src/forces/impulses.ts
+index dbecf03..06d527e 100644
+--- a/lib/vecs-physics/src/forces/impulses.ts
++++ b/lib/vecs-physics/src/forces/impulses.ts
+@@ -68,6 +68,10 @@ export class ImpulseAccumulateModule extends Module {
+ }
+ 
+ function drainLinearImpulses(engine: PhysicsEngine): void {
++  // An empty map would still allocate an iterator per step.
++  if (engine.pendingLinearImpulse.size === 0) {
++    return;
++  }
+   for (const [bodyId, impulse] of engine.pendingLinearImpulse) {
+     // Impulses that cancel out are physically a no-op: skip the wasm call and its wake.
+     if (impulse.x === 0 && impulse.y === 0) {
+@@ -84,6 +88,9 @@ function drainLinearImpulses(engine: PhysicsEngine): void {
+ }
+ 
+ function drainAngularImpulses(engine: PhysicsEngine): void {
++  if (engine.pendingAngularImpulse.size === 0) {
++    return;
++  }
+   for (const [bodyId, impulse] of engine.pendingAngularImpulse) {
+     if (impulse.value === 0) {
+       continue;
+-- 
+2.43.0
+

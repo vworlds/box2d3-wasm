@@ -21,6 +21,8 @@
 //
 // Prints one `TICK_RESULT {json}` line. Timings are ns per body per step; `allocBytesPerStep` is
 // the JS heap growth per step over a GC-free window, i.e. bytes allocated per step.
+import { writeFileSync } from "node:fs";
+import { Session } from "node:inspector/promises";
 import { PerformanceObserver, performance } from "node:perf_hooks";
 import v8 from "node:v8";
 
@@ -69,8 +71,9 @@ const traceEveryStep = process.env.BENCH_TRACE === "1";
 if (!(sceneName in defaults)) {
   throw new Error(`unknown scene ${sceneName}`);
 }
-const warmup = Number(process.env.BENCH_WARMUP_TICKS ?? defaults[sceneName]![0]);
-const steps = Number(process.env.BENCH_TICKS ?? defaults[sceneName]![1]);
+// Empty means unset.
+const warmup = Number(process.env.BENCH_WARMUP_TICKS || defaults[sceneName]![0]);
+const steps = Number(process.env.BENCH_TICKS || defaults[sceneName]![1]);
 
 await preloadPhysics();
 const scene = buildScene(sceneName);
@@ -98,6 +101,18 @@ for (let i = 0; i < warmup; i++) {
   progressAll();
 }
 timers.pose = timers.step = timers.events = timers.forces = 0;
+// BENCH_HEAP_SAMPLE=<file>: sample every allocation of the measured loop, garbage included (the
+// inspector's sampling heap profiler with collected objects kept), and write the profile.
+const heapSampleFile = process.env.BENCH_HEAP_SAMPLE;
+const heapSession = heapSampleFile ? new Session() : undefined;
+if (heapSession !== undefined) {
+  heapSession.connect();
+  await heapSession.post("HeapProfiler.startSampling", {
+    samplingInterval: 64,
+    includeObjectsCollectedByMajorGC: true,
+    includeObjectsCollectedByMinorGC: true,
+  });
+}
 let hash = 2166136261;
 let tickMs = 0;
 for (let i = 0; i < steps; i++) {
@@ -110,6 +125,11 @@ for (let i = 0; i < steps; i++) {
   if (traceEveryStep) {
     hash = digestBodies(hash, scene.bodies);
   }
+}
+if (heapSession !== undefined) {
+  const { profile } = await heapSession.post("HeapProfiler.stopSampling");
+  writeFileSync(heapSampleFile!, JSON.stringify(profile));
+  heapSession.disconnect();
 }
 hash = digestBodies(hash, scene.bodies);
 

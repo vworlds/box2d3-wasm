@@ -1,0 +1,7 @@
+r0 drift500     r3         tick 815 pose 605.8 step 166.2 alloc -1 11c76fa7
+r0 drift500     r4         tick 760.5 pose 553.3 step 168.2 alloc -1 11c76fa7
+r0 drift2000    r3         tick 942.2 pose 741.9 step 180.2 alloc -1 a66a94ee
+r0 drift2000    r4         tick 933.1 pose 745.8 step 172.5 alloc -1 a66a94ee
+r0 drift10000   r3         tick 1792 pose 1524.5 step 257.6 alloc -1 70623967
+r0 drift10000   r4         tick 1822.4 pose 1559.6 step 253.9 alloc -1 70623967
+r0 contact      r3         tick 3351.8 pose 1324.4 step 1853.6 alloc -1 5db7f953

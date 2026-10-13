@@ -19,5 +19,5 @@ for F in ${FLAVOURS:-deluxe}; do
   mkdir -p "$OUT/$F"
   cp build/dist/es/$F/Box2D.$F.{mjs,wasm,d.ts} "$OUT/$F/"
 done
-cp build/dist/es/entry.mjs build/dist/es/entry.d.ts "$OUT/"
+cp build/dist/es/entry.mjs build/dist/es/entry.d.ts build/dist/es/fastpath.mjs build/dist/es/fastpath.d.ts build/dist/es/fastpath_body.gen.d.ts "$OUT/"
 echo "built $OUT"
