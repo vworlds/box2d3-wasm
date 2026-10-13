@@ -5,8 +5,70 @@ import type { FastPathBodyExports } from "./fastpath_body.gen";
 
 export type { FastPathBodyExports } from "./fastpath_body.gen";
 
-/** The module with the generated b2x_Body_* declarations typed by parameter name. */
-export type FastPathModule = MainModule & FastPathBodyExports;
+/**
+ * The hand-written b2x_ exports (csrc/fastpath.cpp), typed by parameter name. All arguments and
+ * results are plain numbers: ids are packed (see {@link FastPath.world} and {@link FastPath.rev}),
+ * pointers are byte addresses in wasm memory, floats cross as f32.
+ */
+export interface FastPathCoreExports {
+  /** JSON layout of every exposed struct (sizes and byte offsets from sizeof/offsetof); a C
+   * string at the returned address. Read it through {@link FastPath.layout}. */
+  _b2x_GetLayout(): number;
+  /** Fast-path API version (layout.constants.version). */
+  _b2x_GetVersion(): number;
+  /** Box2D's profile timers on (1, default) or off (0). Off: b2World_GetProfile reads zeros,
+   * results are unaffected, each step makes no JavaScript clock calls. Global to the module. */
+  _b2x_SetProfileTimers(enabled: number): void;
+  _b2x_GetProfileTimers(): number;
+  /** b2World_Step(world, timeStep, subStepCount). May grow memory. */
+  _b2x_World_Step(world: number, timeStep: number, subStepCount: number): void;
+  /** Move-event count of the last step. */
+  _b2x_World_GetMoveCount(world: number): number;
+  /**
+   * Write one b2xMove record (layout.move) per move event of the last step, in Box2D's event
+   * order, to `outPtr` (at most `capacity`). Returns the number of records the export produced;
+   * if it exceeds `capacity` only `capacity` were written: grow and call again (the events stay
+   * valid until the next step). `flags`: layout.constants.exportVelocity | exportDynamicOnly.
+   * Never grows memory.
+   */
+  _b2x_World_ExportMoves(world: number, outPtr: number, capacity: number, flags: number): number;
+  /** b2x_World_Step then b2x_World_ExportMoves in one crossing. */
+  _b2x_World_StepAndExportMoves(
+    world: number,
+    timeStep: number,
+    subStepCount: number,
+    outPtr: number,
+    capacity: number,
+    flags: number
+  ): number;
+  /** Write {ptr, count} (layout.span) of Box2D's own b2BodyMoveEvent array (layout.moveEvent). */
+  _b2x_World_GetMoveEventSpan(world: number, outPtr: number): void;
+  /** Write the begin/end/hit spans (layout.contactSpans) of Box2D's contact event arrays
+   * (layouts contactBegin, contactEnd, contactHit). Valid until the next step or world change. */
+  _b2x_World_GetContactSpans(world: number, outPtr: number): void;
+  /** Write the begin/end spans (layout.sensorSpans) of Box2D's sensor event arrays
+   * (layouts sensorBegin, sensorEnd). Valid until the next step or world change. */
+  _b2x_World_GetSensorSpans(world: number, outPtr: number): void;
+  /** Store an unsigned 32-bit integer in the body's user data; move records carry it. */
+  _b2x_Body_SetUserData(index1: number, rev: number, value: number): void;
+  _b2x_Body_GetUserData(index1: number, rev: number): number;
+  _b2x_Shape_SetUserData(index1: number, rev: number, value: number): void;
+  _b2x_Shape_GetUserData(index1: number, rev: number): number;
+  /** b2Body_SetTransform(id, {x, y}, b2Body_GetRotation(id)). */
+  _b2x_Body_SetPosition(index1: number, rev: number, x: number, y: number): void;
+  /** b2Body_SetTransform(id, b2Body_GetPosition(id), b2MakeRot(angle)). */
+  _b2x_Body_SetAngle(index1: number, rev: number, angle: number): void;
+  /** Write position, rotation and b2Rot_GetAngle (layout.pose) to `outPtr`. */
+  _b2x_Body_GetPose(index1: number, rev: number, outPtr: number): void;
+  /** Write awake, velocities, damping, local center, mass, gravity scale (layout.motion). */
+  _b2x_Body_GetMotion(index1: number, rev: number, outPtr: number): void;
+  _malloc(bytes: number): number;
+  _free(ptr: number): void;
+  wasmMemory: WebAssembly.Memory;
+}
+
+/** The module with every b2x_ export typed by parameter name, on top of the embind API. */
+export type FastPathModule = MainModule & FastPathCoreExports & FastPathBodyExports;
 
 /** A struct layout: `size` and field offsets, all in bytes, generated in C with sizeof/offsetof. */
 export type StructLayout<F extends string> = { size: number } & Record<F, number>;

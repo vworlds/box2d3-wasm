@@ -1,7 +1,7 @@
 {
-  "name": "box2d3-wasm",
-  "version": "5.2.0",
-  "description": "Let's try and use box2d v3 on the web.",
+  "name": "@vworlds/box2d3-wasm",
+  "version": "5.2.0-vworlds.1",
+  "description": "box2d3-wasm 5.2.0 plus a zero-allocation fast path (b2x_ raw exports, bulk move export, zero-copy event spans) with bit-identical results.",
   "//": "we prefer ES modules, but we can just name those .mjs. we set the package type as commonjs so that the .js UMD module can be treated as CommonJS (a valid interpretation though not the only one) without having to name it .cjs (which would mislead, as its compatibility is not only CommonJS, but also AMD and browser globals)",
   "type": "commonjs",
   "types": "build/dist/es/entry.d.ts",
@@ -38,10 +38,13 @@
   },
   "author": "Alex Birch & Erik Sombroek",
   "repository": {
-    "url": "git+https://github.com/Birch-san/box2d3-wasm.git",
+    "url": "git+https://github.com/vworlds/box2d3-wasm.git",
     "directory": "box2d3-wasm"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {},
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "devDependencies": {}

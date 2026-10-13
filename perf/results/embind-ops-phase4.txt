@@ -1,0 +1,26 @@
+     13.5 ns  baseline: empty JS loop body   | run2:      13.8 
+   3201.8 ns  b2World_Step(emptyWorld) — call + worldId marshal   | run2:    4444.4 
+   1128.5 ns  b2World_GetBodyEvents(worldId) + delete   | run2:    1358.4 
+     61.0 ns  bodyEvents.moveCount   | run2:      58.6 
+    898.4 ns  bodyEvents.GetMoveEvent(i) + delete   | run2:    1003.9 
+    293.2 ns  move.bodyId (value_object read)   | run2:     307.8 
+    838.2 ns  move.transform (reference handle)   | run2:     918.6 
+    851.0 ns  transform.p (reference handle)   | run2:     858.0 
+    829.5 ns  transform.q (reference handle)   | run2:     882.1 
+     86.3 ns  vec2.x (float getter)   | run2:      87.4 
+     44.9 ns  q.GetAngle()   | run2:      41.3 
+   1433.5 ns  b2Body_GetLinearVelocity(bodyId) + .x/.y + delete   | run2:    1589.1 
+    231.4 ns  b2Body_GetAngularVelocity(bodyId)   | run2:     275.4 
+   1284.7 ns  b2Body_GetPosition(bodyId) + delete   | run2:    1325.4 
+   1305.4 ns  b2Body_GetRotation(bodyId) + delete   | run2:    1380.2 
+   1251.5 ns  b2Body_GetTransform(bodyId) + delete   | run2:    1467.8 
+    228.7 ns  b2Body_IsAwake(bodyId)   | run2:     273.4 
+    246.3 ns  b2Body_GetType(bodyId)   | run2:     311.5 
+    237.1 ns  b2Body_GetMass(bodyId)   | run2:     315.8 
+   2608.1 ns  b2Body_SetLinearVelocity(bodyId, vec) [vec.Set first]   | run2:    3054.2 
+    891.7 ns  vec.Set(x, y)   | run2:     821.0 
+    417.0 ns  b2Body_SetAngularVelocity(bodyId, w)   | run2:     500.8 
+   1186.9 ns  b2Body_ApplyForceToCenter(bodyId, zeroVec, false)   | run2:    1465.6 
+   1125.9 ns  b2MakeRot(angle) + delete   | run2:    1192.9 
+   1814.6 ns  b2World_GetContactEvents(worldId) + counts + delete   | run2:    1817.7 
+   1323.3 ns  b2World_GetSensorEvents(worldId) + counts + delete   | run2:    1278.6 

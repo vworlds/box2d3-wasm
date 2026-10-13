@@ -5,7 +5,8 @@
 #
 # Env: VECS_SCRATCH (scratch adapter checkout, default ../vecs-scratch),
 #      VECS_STOCK (unmodified vecs checkout, default ../vecs-stock),
-#      PKG_USE (script that points a checkout's box2d3-wasm at a build, default /home/user/pkg/use.sh).
+#      PKG_USE (script that points a checkout's box2d3-wasm at a build, default perf/use-build.sh;
+#      it honours PKG_ROOT, default /home/user/pkg).
 # --quick skips the vecs test suites.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,7 +14,7 @@ BUILD="$(realpath "$1")"
 QUICK="${2:-}"
 VECS_SCRATCH="$(realpath "${VECS_SCRATCH:-$ROOT/../vecs-scratch}")"
 VECS_STOCK="$(realpath "${VECS_STOCK:-$ROOT/../vecs-stock}")"
-PKG_USE="${PKG_USE:-/home/user/pkg/use.sh}"
+PKG_USE="${PKG_USE:-$ROOT/perf/use-build.sh}"
 
 declare -A REF=(
   [drift500]=11c76fa7 [drift2000]=a66a94ee [drift10000]=70623967 [contact]=5db7f953
@@ -54,8 +55,8 @@ echo "== checksums, unmodified vecs (embind API)"
 checksums unmodified "$VECS_STOCK"
 if [[ "$QUICK" != "--quick" ]]; then
   echo "== vecs suites, scratch adapter"
-  suites scratch "$VECS_SCRATCH" vecs-scratch
+  suites scratch "$VECS_SCRATCH" "$(basename "$VECS_SCRATCH")"
   echo "== vecs suites, unmodified vecs"
-  suites unmodified "$VECS_STOCK" vecs-stock
+  suites unmodified "$VECS_STOCK" "$(basename "$VECS_STOCK")"
 fi
 echo "PROOF OK $BUILD"
