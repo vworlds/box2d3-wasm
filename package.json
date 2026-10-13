@@ -1,6 +1,6 @@
 {
   "name": "@vworlds/box2d3-wasm",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "description": "Box2D v3 for the web and Node as WebAssembly: a flat C-style embind API plus a zero-allocation fast path.",
   "type": "module",
   "main": "./dist/entry.mjs",
