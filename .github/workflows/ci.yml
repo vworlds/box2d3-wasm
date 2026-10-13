@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - master
+  push:
+    branches:
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build dist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - uses: ./.github/actions/build
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    name: Tests and package content
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: dist
+          path: dist
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generated fast-path code is current
+        run: npm run gen:check
+
+      - name: Bindings cover Box2D's headers
+        run: npm run check:bindings
+
+      - name: Release script
+        run: npm run test:release
+
+      - name: Tests
+        run: npm test
+
+      - name: Tests against stock box2d3-wasm
+        run: npm run test:stock
+
+      - name: Package content
+        run: npm run check:pack
+
+  demo:
+    name: Demo build
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: demo/package-lock.json
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: dist
+          path: dist
+
+      - name: Build the demo
+        working-directory: demo
+        run: |
+          npm ci
+          npm run build
+
+  vecs:
+    name: vecs suites (pinned commit)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VECS_READ_TOKEN: ${{ secrets.VECS_READ_TOKEN }}
+    steps:
+      - name: Is VECS_READ_TOKEN available?
+        id: gate
+        run: |
+          if [ -n "$VECS_READ_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=vecs suites skipped::The secret VECS_READ_TOKEN is not available (a fork, or the repository owner has not added it yet), so the private vecs repository cannot be checked out. See docs/releasing.md."
+          fi
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned vecs commit
+        id: pin
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          ref="$(tr -d '[:space:]' < ci/vecs-ref)"
+          case "$ref" in
+            *[!0-9a-f]* | "") echo "::error::ci/vecs-ref must hold a full commit sha"; exit 1 ;;
+          esac
+          [ "${#ref}" -eq 40 ] || { echo "::error::ci/vecs-ref must hold a full 40-character commit sha"; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          repository: vworlds/vecs
+          ref: ${{ steps.pin.outputs.ref }}
+          token: ${{ secrets.VECS_READ_TOKEN }}
+          path: vecs
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          node-version: "24"
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          name: dist
+          path: dist
+
+      - name: Pack the package
+        if: steps.gate.outputs.enabled == 'true'
+        run: npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+
+      - name: Run the vecs suites
+        if: steps.gate.outputs.enabled == 'true'
+        run: scripts/run-vecs-suites.sh vecs "$RUNNER_TEMP"/vworlds-box2d3-wasm-*.tgz
