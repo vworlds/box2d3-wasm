@@ -1,0 +1,16 @@
+r0 drift500     r4         tick 956.2 pose 733.2 step 164 alloc 203081 0557d658
+r0 drift2000    r4         tick 996.4 pose 809.7 step 167.2 alloc 787259 afd5924a
+r0 drift10000   r4         tick 4153.6 pose 3886.2 step 253.2 alloc 3852578 ac22f82f
+r0 contact      r4         tick 3259.8 pose 1363.7 step 1756.2 alloc 839949 9bcec695
+r0 worlds25x19  r4         tick 1994 pose 938.2 step 249.2 alloc 328099 ab7528bd
+r0 rest2000     r4         tick 352.1 pose 244.4 step 89.4 alloc 9983 17fc310b
+r0 drive500     r4         tick 2063.9 pose 1216.4 step 513.4 alloc 437131 7ef0263f
+
+scene        variant     metric   median     min       max     spread  checksums
+drift500     r4         allocBytesPerStep 203081.0  203081.0  203081.0    0.0%  0557d658
+drift2000    r4         allocBytesPerStep 787259.0  787259.0  787259.0    0.0%  afd5924a
+drift10000   r4         allocBytesPerStep 3852578.0 3852578.0 3852578.0    0.0%  ac22f82f
+contact      r4         allocBytesPerStep 839949.0  839949.0  839949.0    0.0%  9bcec695
+worlds25x19  r4         allocBytesPerStep 328099.0  328099.0  328099.0    0.0%  ab7528bd
+rest2000     r4         allocBytesPerStep   9983.0    9983.0    9983.0    0.0%  17fc310b
+drive500     r4         allocBytesPerStep 437131.0  437131.0  437131.0    0.0%  7ef0263f

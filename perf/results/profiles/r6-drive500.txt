@@ -1,0 +1,56 @@
+profile /home/user/prof/r6/drive500.cpuprofile
+tick-loop samples: 1626 ms
+
+== by category (self time)
+ 52.6%  vecs
+ 25.0%  box2d
+ 17.7%  vecs-physics
+  2.9%  gc
+  0.7%  engine
+  0.6%  bench
+  0.3%  embind-wasm
+
+== by system x category
+ 52.1%  other
+     43.7%  vecs
+      5.1%  vecs-physics
+      2.3%  box2d
+      0.6%  bench
+      0.3%  engine
+      0.1%  embind-wasm
+ 22.4%  PhysicsPoseSyncOut
+     11.8%  vecs-physics
+      9.0%  vecs
+      1.4%  box2d
+      0.1%  engine
+      0.0%  embind-wasm
+ 21.3%  PhysicsStep
+     21.2%  box2d
+      0.1%  embind-wasm
+  2.9%  (garbage collector)
+      2.9%  gc
+  1.1%  PhysicsEvents
+      0.8%  vecs-physics
+      0.2%  embind-wasm
+      0.1%  engine
+      0.0%  box2d
+  0.2%  (program)
+      0.2%  engine
+
+== top 16 functions (self time)
+ 22.4%  vecs  _set  lib/vecs/dist/entity/entity.components.js:92
+  8.0%  vecs  _resolveInjected  lib/vecs/dist/inject.js:91
+  6.2%  vecs-physics  writePose  lib/vecs-physics/dist/body/pose_out.js:91
+  6.2%  box2d  b2FindPairsTask  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  5.6%  vecs-physics  (anon)  lib/vecs-physics/dist/body/pose_out.js:35
+  5.5%  vecs  set  lib/vecs/dist/entity/entity.components.js:306
+  3.2%  box2d  b2PartitionMid  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  3.1%  box2d  b2ExecuteBlock  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  2.9%  gc  (garbage collector)  :0
+  2.7%  vecs  flush  lib/vecs/dist/world/world.deferred.js:52
+  2.6%  box2d  b2World_Step  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  2.4%  vecs-physics  (anon)  lib/vecs-physics/dist/forces/gather.js:36
+  2.4%  vecs-physics  (anon)  lib/vecs-physics/dist/forces/gather.js:18
+  2.3%  vecs  _notifyModified  lib/vecs/dist/system.js:138
+  2.1%  vecs  get  lib/vecs/dist/entity/entity.components.js:163
+  1.8%  box2d  b2DynamicTree_Rebuild  wasm://wasm/Box2D.deluxe.wasm-002391de:1

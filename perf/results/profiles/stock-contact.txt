@@ -1,0 +1,80 @@
+profile /home/user/prof/stock/contact.cpuprofile
+tick-loop samples: 6990 ms
+
+== by category (self time)
+ 44.3%  embind-js
+ 22.1%  box2d
+ 14.7%  vecs
+  8.3%  vecs-physics
+  4.0%  embind-wasm
+  3.7%  wasm-alloc
+  1.5%  gc
+  1.4%  engine
+  0.0%  bench
+
+== by system x category
+ 62.9%  PhysicsPoseSyncOut
+     42.9%  embind-js
+      7.0%  vecs-physics
+      3.6%  embind-wasm
+      3.6%  vecs
+      3.5%  wasm-alloc
+      1.2%  engine
+      1.0%  box2d
+ 21.5%  PhysicsStep
+     21.0%  box2d
+      0.2%  embind-js
+      0.1%  engine
+      0.1%  embind-wasm
+      0.0%  vecs-physics
+      0.0%  wasm-alloc
+ 11.0%  other
+     10.9%  vecs
+      0.0%  vecs-physics
+      0.0%  bench
+      0.0%  engine
+      0.0%  embind-wasm
+  3.1%  PhysicsEvents
+      1.3%  embind-js
+      1.2%  vecs-physics
+      0.2%  vecs
+      0.2%  embind-wasm
+      0.1%  wasm-alloc
+      0.0%  engine
+      0.0%  box2d
+  1.5%  (garbage collector)
+      1.5%  gc
+  0.0%  (program)
+      0.0%  engine
+
+== top 30 functions (self time)
+ 31.6%  embind-js  makeClassHandle  deluxe/Box2D.deluxe.mjs:1956
+  6.0%  vecs  _set  lib/vecs/dist/entity/entity.components.js:92
+  4.4%  box2d  b2SolveContactsTask  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  4.2%  embind-js  get  deluxe/Box2D.deluxe.mjs:2493
+  3.9%  vecs-physics  writePose  lib/vecs-physics/dist/body/pose_out.js:77
+  3.4%  box2d  b2FindPairsTask  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  3.2%  vecs-physics  (anon)  lib/vecs-physics/dist/body/pose_out.js:13
+  3.1%  embind-js  RegisteredPointer_fromWireType  deluxe/Box2D.deluxe.mjs:1976
+  3.0%  vecs  flush  lib/vecs/dist/world/world.deferred.js:52
+  2.4%  vecs  get  lib/vecs/dist/entity/entity.components.js:163
+  2.4%  box2d  b2CollideTask  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  1.9%  embind-js  toWireType  deluxe/Box2D.deluxe.mjs:1429
+  1.6%  box2d  b2ExecuteBlock  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  1.6%  wasm-alloc  pthread_mutex_lock  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  1.5%  gc  (garbage collector)  :0
+  1.5%  embind-js  validateThis  deluxe/Box2D.deluxe.mjs:2457
+  1.4%  box2d  b2PairQueryCallback  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  1.2%  engine  (anon)  :3
+  1.2%  box2d  b2PolygonAndCircleManifold  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  1.1%  embind-js  fromWireType  deluxe/Box2D.deluxe.mjs:1421
+  1.0%  box2d  b2World_Step  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.9%  box2d  b2PartitionMid  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.9%  vecs  getEntity  lib/vecs/dist/world/world.entities.js:47
+  0.8%  wasm-alloc  emscripten_builtin_malloc  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.8%  box2d  b2CollidePolygons  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.7%  vecs  _processCommandQueue  lib/vecs/dist/world/world.deferred.js:92
+  0.7%  wasm-alloc  pthread_mutex_unlock  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.6%  box2d  b2CircleManifold  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.6%  box2d  b2FinalizeBodiesTask  wasm://wasm/Box2D.deluxe.wasm-0020153e:1
+  0.6%  box2d  b2DynamicTree_Query  wasm://wasm/Box2D.deluxe.wasm-0020153e:1

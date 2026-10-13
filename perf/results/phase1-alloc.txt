@@ -1,0 +1,7 @@
+
+scene        variant     metric   median     min       max     spread  checksums
+drift500     stock      allocBytesPerStep 1890957.0 1890957.0 1890957.0    0.0%  0557d658
+drift2000    stock      allocBytesPerStep 7502215.0 7502215.0 7502215.0    0.0%  afd5924a
+drift10000   stock      allocBytesPerStep 37761390.0 37761366.0 37761414.0    0.0%  ac22f82f
+contact      stock      allocBytesPerStep 4274200.0 4274200.0 4274200.0    0.0%  9bcec695
+worlds25x19  stock      allocBytesPerStep 2103848.0 2103834.0 2103862.0    0.0%  ab7528bd

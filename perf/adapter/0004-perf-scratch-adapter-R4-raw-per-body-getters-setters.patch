@@ -1,0 +1,377 @@
+From 468e831fc9759557f14e8388eac8d43a202f388e Mon Sep 17 00:00:00 2001
+From: scratch <jm@peletier.com>
+Date: Tue, 13 Oct 2026 00:18:38 +0000
+Subject: [PATCH 4/7] perf: scratch adapter R4 - raw per-body getters/setters
+ for pose-in, forces, impulses, kinematic targets, bodyMotion (local only)
+
+---
+ lib/vecs-physics/src/adapter/queries.ts   | 43 +++++++++---------
+ lib/vecs-physics/src/adapter/runtime.ts   |  8 ++++
+ lib/vecs-physics/src/body/pose_in.ts      | 33 +++++---------
+ lib/vecs-physics/src/forces/gather.ts     | 19 +++++---
+ lib/vecs-physics/src/forces/impulses.ts   | 19 +++++---
+ lib/vecs-physics/src/kinematic/targets.ts | 53 +++++++++++++----------
+ 6 files changed, 99 insertions(+), 76 deletions(-)
+
+diff --git a/lib/vecs-physics/src/adapter/queries.ts b/lib/vecs-physics/src/adapter/queries.ts
+index a9cf028..1fc1e0c 100644
+--- a/lib/vecs-physics/src/adapter/queries.ts
++++ b/lib/vecs-physics/src/adapter/queries.ts
+@@ -17,7 +17,9 @@ import {
+   scr_b2AABB,
+   scr_b2QueryFilter,
+   scr_b2ShapeProxy,
++  rev,
+   scr_b2Vec2,
++  scr_fastOut,
+   type Box2DModule,
+ } from "./runtime.js";
+ import {
+@@ -240,34 +242,33 @@ class PhysicsQueriesImpl implements PhysicsQueries {
+     if (body === undefined || bodyId === undefined) {
+       return false;
+     }
+-    const { box2d } = this.engine;
+-    out.awake = box2d.b2Body_IsAwake(bodyId);
+-    const linear = box2d.b2Body_GetLinearVelocity(bodyId);
+-    try {
+-      out.vx = linear.x;
+-      out.vy = linear.y;
+-    } finally {
+-      linear.delete();
+-    }
+-    out.w = box2d.b2Body_GetAngularVelocity(bodyId);
+-    out.linearDamping = box2d.b2Body_GetLinearDamping(bodyId);
+-    out.angularDamping = box2d.b2Body_GetAngularDamping(bodyId);
+-    const center = box2d.b2Body_GetLocalCenterOfMass(bodyId);
+-    try {
+-      out.localCenterX = center.x;
+-      out.localCenterY = center.y;
+-    } finally {
+-      center.delete();
+-    }
++    // The eight getters in one crossing, read in the same order (b2x_Body_GetMotion).
++    const fast = this.engine.fast;
++    fast.module._b2x_Body_GetMotion(bodyId.index1, rev(bodyId), scr_fastOut);
++    fast.sync();
++    const m = fast.layout.motion;
++    const f32 = fast.f32;
++    const at = scr_fastOut;
++    out.awake = fast.i32[(at + m.awake) >> 2] !== 0;
++    out.vx = f32[(at + m.vx) >> 2]!;
++    out.vy = f32[(at + m.vy) >> 2]!;
++    out.w = f32[(at + m.w) >> 2]!;
++    out.linearDamping = f32[(at + m.linearDamping) >> 2]!;
++    out.angularDamping = f32[(at + m.angularDamping) >> 2]!;
++    out.localCenterX = f32[(at + m.localCenterX) >> 2]!;
++    out.localCenterY = f32[(at + m.localCenterY) >> 2]!;
+     // Box2D applies gravity times the scale only to a body with mass (src/solver.c:99).
+-    out.gravityScale = box2d.b2Body_GetMass(bodyId) > 0 ? box2d.b2Body_GetGravityScale(bodyId) : 0;
++    out.gravityScale = f32[(at + m.mass) >> 2]! > 0 ? f32[(at + m.gravityScale) >> 2]! : 0;
+     out.allowFastRotation = body.allowFastRotation;
+     return true;
+   }
+ 
+   public isAwake(entity: Entity): boolean {
+     const bodyId = entity.get(Body)?._bodyId;
+-    return bodyId !== undefined && this.engine.box2d.b2Body_IsAwake(bodyId);
++    return (
++      bodyId !== undefined &&
++      this.engine.fast.module._b2x_Body_IsAwake(bodyId.index1, rev(bodyId)) !== 0
++    );
+   }
+ 
+   public settings(): PhysicsSettings {
+diff --git a/lib/vecs-physics/src/adapter/runtime.ts b/lib/vecs-physics/src/adapter/runtime.ts
+index 9ccf2a0..8cd822e 100644
+--- a/lib/vecs-physics/src/adapter/runtime.ts
++++ b/lib/vecs-physics/src/adapter/runtime.ts
+@@ -10,6 +10,8 @@ export type Box2DModule = Awaited<ReturnType<typeof Box2DFactory>>;
+ let modulePromise: Promise<Box2DModule> | null = null;
+ let module: Box2DModule | null = null;
+ let fastPath: FastPath | null = null;
++/** 64-byte wasm scratch for fast-path out-parameters (pose, motion); non-reentrant like scr_*. */
++export let scr_fastOut = 0;
+ 
+ // Global scratch pools for common Box2D structs. Allocated once at module load,
+ // reused across queries and other non-reentrant operations.
+@@ -33,6 +35,7 @@ export async function preloadPhysics(): Promise<void> {
+   modulePromise = Box2DFactory().then((loadedModule) => {
+     module = loadedModule;
+     fastPath = createFastPath(loadedModule);
++    scr_fastOut = fastPath.alloc(64);
+     // Box2D's profile timers read a clock (a JavaScript call) per timed section of every step,
+     // only to fill b2World_GetProfile, which vecs never reads. They never affect results.
+     fastPath.setProfileTimers(false);
+@@ -78,6 +81,11 @@ export function getBox2D(): Box2DModule {
+   return module;
+ }
+ 
++/** `rev` half of a packed fast-path id: world0 | generation << 16. */
++export function rev(id: { world0: number; generation: number }): number {
++  return id.world0 | (id.generation << 16);
++}
++
+ /** The b2x_ fast path over the loaded module: raw exports, struct layouts, memory views. */
+ export function getFastPath(): FastPath {
+   if (!fastPath) {
+diff --git a/lib/vecs-physics/src/body/pose_in.ts b/lib/vecs-physics/src/body/pose_in.ts
+index 46a37ba..1cff623 100644
+--- a/lib/vecs-physics/src/body/pose_in.ts
++++ b/lib/vecs-physics/src/body/pose_in.ts
+@@ -2,7 +2,7 @@ import { Module } from "@vworlds/vecs";
+ 
+ import { getPhysicsEngine, PhysicsSystemTag } from "../adapter/engine.js";
+ import { AngularVelocity, Body, LinearVelocity, Position, Rotation } from "./components.js";
+-import { scr_b2Vec2 } from "../adapter/runtime.js";
++import { rev } from "../adapter/runtime.js";
+ import { PhysicsCoreModule } from "../core/module.js";
+ 
+ export class BodyPoseInModule extends Module {
+@@ -30,14 +30,8 @@ export class BodyPoseInModule extends Module {
+           return;
+         }
+ 
+-        const rotation = engine.box2d.b2Body_GetRotation(bodyId);
+-        try {
+-          const vec = scr_b2Vec2[0];
+-          vec.Set(position.x, position.y);
+-          engine.box2d.b2Body_SetTransform(bodyId, vec, rotation);
+-        } finally {
+-          rotation.delete();
+-        }
++        // b2Body_SetTransform(id, {x, y}, b2Body_GetRotation(id)) in one crossing.
++        engine.fast.module._b2x_Body_SetPosition(bodyId.index1, rev(bodyId), position.x, position.y);
+       })
+       .add(PhysicsSystemTag);
+ 
+@@ -52,14 +46,8 @@ export class BodyPoseInModule extends Module {
+           return;
+         }
+ 
+-        const position = engine.box2d.b2Body_GetPosition(bodyId);
+-        const wasmRotation = engine.box2d.b2MakeRot(rotation.angle);
+-        try {
+-          engine.box2d.b2Body_SetTransform(bodyId, position, wasmRotation);
+-        } finally {
+-          wasmRotation.delete();
+-          position.delete();
+-        }
++        // b2Body_SetTransform(id, b2Body_GetPosition(id), b2MakeRot(angle)) in one crossing.
++        engine.fast.module._b2x_Body_SetAngle(bodyId.index1, rev(bodyId), rotation.angle);
+       })
+       .add(PhysicsSystemTag);
+ 
+@@ -76,9 +64,12 @@ export class BodyPoseInModule extends Module {
+             return;
+           }
+ 
+-          const vec = scr_b2Vec2[0];
+-          vec.Set(velocity.x, velocity.y);
+-          engine.box2d.b2Body_SetLinearVelocity(bodyId, vec);
++          engine.fast.module._b2x_Body_SetLinearVelocity(
++            bodyId.index1,
++            rev(bodyId),
++            velocity.x,
++            velocity.y
++          );
+         }
+       )
+       .add(PhysicsSystemTag);
+@@ -96,7 +87,7 @@ export class BodyPoseInModule extends Module {
+             return;
+           }
+ 
+-          engine.box2d.b2Body_SetAngularVelocity(bodyId, velocity.value);
++          engine.fast.module._b2x_Body_SetAngularVelocity(bodyId.index1, rev(bodyId), velocity.value);
+         }
+       )
+       .add(PhysicsSystemTag);
+diff --git a/lib/vecs-physics/src/forces/gather.ts b/lib/vecs-physics/src/forces/gather.ts
+index 97d1cf8..abfd6d9 100644
+--- a/lib/vecs-physics/src/forces/gather.ts
++++ b/lib/vecs-physics/src/forces/gather.ts
+@@ -3,7 +3,7 @@ import { ChildOf, Module } from "@vworlds/vecs";
+ import { getPhysicsEngine, PhysicsSystemTag } from "../adapter/engine.js";
+ import { Body } from "../body/components.js";
+ import { Force, Torque } from "./components.js";
+-import { scr_b2Vec2 } from "../adapter/runtime.js";
++import { rev } from "../adapter/runtime.js";
+ import { PhysicsCoreModule } from "../core/module.js";
+ 
+ const forceTargetPredicate = { any: [Body, { parent: Body }] } as const;
+@@ -32,9 +32,13 @@ export class ForceGatherModule extends Module {
+           return;
+         }
+ 
+-        const vec = scr_b2Vec2[0];
+-        vec.Set(force.x, force.y);
+-        engine.box2d.b2Body_ApplyForceToCenter(bodyId, vec, force.wake);
++        engine.fast.module._b2x_Body_ApplyForceToCenter(
++          bodyId.index1,
++          rev(bodyId),
++          force.x,
++          force.y,
++          force.wake ? 1 : 0
++        );
+       })
+       .add(PhysicsSystemTag);
+ 
+@@ -56,7 +60,12 @@ export class ForceGatherModule extends Module {
+             return;
+           }
+ 
+-          engine.box2d.b2Body_ApplyTorque(bodyId, torque.value, torque.wake);
++          engine.fast.module._b2x_Body_ApplyTorque(
++            bodyId.index1,
++            rev(bodyId),
++            torque.value,
++            torque.wake ? 1 : 0
++          );
+         }
+       )
+       .add(PhysicsSystemTag);
+diff --git a/lib/vecs-physics/src/forces/impulses.ts b/lib/vecs-physics/src/forces/impulses.ts
+index 06d527e..d9432ba 100644
+--- a/lib/vecs-physics/src/forces/impulses.ts
++++ b/lib/vecs-physics/src/forces/impulses.ts
+@@ -1,7 +1,7 @@
+ import { Module } from "@vworlds/vecs";
+ 
+ import { AngularImpulse, Impulse } from "./components.js";
+-import { scr_b2Vec2 } from "../adapter/runtime.js";
++import { rev } from "../adapter/runtime.js";
+ import {
+   getPhysicsEngine,
+   PhysicsSystemTag,
+@@ -80,9 +80,13 @@ function drainLinearImpulses(engine: PhysicsEngine): void {
+     if (!engine.entityByBodyIndex.has(bodyId.index1)) {
+       continue;
+     }
+-    const vec = scr_b2Vec2[0];
+-    vec.Set(impulse.x, impulse.y);
+-    engine.box2d.b2Body_ApplyLinearImpulseToCenter(bodyId, vec, impulse.wake);
++    engine.fast.module._b2x_Body_ApplyLinearImpulseToCenter(
++      bodyId.index1,
++      rev(bodyId),
++      impulse.x,
++      impulse.y,
++      impulse.wake ? 1 : 0
++    );
+   }
+   engine.pendingLinearImpulse.clear();
+ }
+@@ -98,7 +102,12 @@ function drainAngularImpulses(engine: PhysicsEngine): void {
+     if (!engine.entityByBodyIndex.has(bodyId.index1)) {
+       continue;
+     }
+-    engine.box2d.b2Body_ApplyAngularImpulse(bodyId, impulse.value, impulse.wake);
++    engine.fast.module._b2x_Body_ApplyAngularImpulse(
++      bodyId.index1,
++      rev(bodyId),
++      impulse.value,
++      impulse.wake ? 1 : 0
++    );
+   }
+   engine.pendingAngularImpulse.clear();
+ }
+diff --git a/lib/vecs-physics/src/kinematic/targets.ts b/lib/vecs-physics/src/kinematic/targets.ts
+index a255697..f776212 100644
+--- a/lib/vecs-physics/src/kinematic/targets.ts
++++ b/lib/vecs-physics/src/kinematic/targets.ts
+@@ -8,7 +8,7 @@ import {
+ } from "../adapter/engine.js";
+ import { Body } from "../body/components.js";
+ import { KinematicTargetPosition, KinematicTargetRotation } from "./components.js";
+-import { scr_b2Vec2 } from "../adapter/runtime.js";
++import { rev, scr_fastOut } from "../adapter/runtime.js";
+ import { PhysicsCoreModule } from "../core/module.js";
+ 
+ export class KinematicTargetsModule extends Module {
+@@ -52,10 +52,15 @@ function drivePositionTarget(
+     return;
+   }
+ 
+-  const position = engine.box2d.b2Body_GetPosition(bodyId);
+-  try {
+-    const dx = target.x - position.x;
+-    const dy = target.y - position.y;
++  const fast = engine.fast;
++  fast.module._b2x_Body_GetPosition(bodyId.index1, rev(bodyId), scr_fastOut);
++  fast.sync();
++  const out = scr_fastOut >> 2;
++  const px = fast.f32[out]!;
++  const py = fast.f32[out + 1]!;
++  {
++    const dx = target.x - px;
++    const dy = target.y - py;
+     const dist = Math.hypot(dx, dy);
+     if (dist > target.tolerance) {
+       let vx = dx / dt;
+@@ -68,13 +73,11 @@ function drivePositionTarget(
+       }
+       setLinearVelocity(engine, bodyId, vx, vy);
+       if (target.wake) {
+-        engine.box2d.b2Body_SetAwake(bodyId, true);
++        fast.module._b2x_Body_SetAwake(bodyId.index1, rev(bodyId), 1);
+       }
+     } else {
+       setLinearVelocity(engine, bodyId, 0, 0);
+     }
+-  } finally {
+-    position.delete();
+   }
+ }
+ 
+@@ -88,30 +91,32 @@ function driveRotationTarget(
+     return;
+   }
+ 
+-  const rotation = engine.box2d.b2Body_GetRotation(bodyId);
+-  try {
+-    const da = wrap(target.angle - rotation.GetAngle(), -Math.PI, Math.PI);
+-    if (Math.abs(da) > target.tolerance) {
+-      engine.box2d.b2Body_SetAngularVelocity(bodyId, da / dt);
+-      if (target.wake) {
+-        engine.box2d.b2Body_SetAwake(bodyId, true);
+-      }
+-    } else {
+-      engine.box2d.b2Body_SetAngularVelocity(bodyId, 0);
++  const fast = engine.fast;
++  const r = rev(bodyId);
++  fast.module._b2x_Body_GetPose(bodyId.index1, r, scr_fastOut);
++  fast.sync();
++  // b2Rot_GetAngle of the body rotation: the b2Atan2(s, c) that embind's GetAngle runs.
++  const angle = fast.f32[(scr_fastOut + fast.layout.pose.angle) >> 2]!;
++  const da = wrap(target.angle - angle, -Math.PI, Math.PI);
++  if (Math.abs(da) > target.tolerance) {
++    fast.module._b2x_Body_SetAngularVelocity(bodyId.index1, r, da / dt);
++    if (target.wake) {
++      fast.module._b2x_Body_SetAwake(bodyId.index1, r, 1);
+     }
+-  } finally {
+-    rotation.delete();
++  } else {
++    fast.module._b2x_Body_SetAngularVelocity(bodyId.index1, r, 0);
+   }
+ }
+ 
+ function isKinematicBody(engine: PhysicsEngine, bodyId: b2BodyId): boolean {
+-  return engine.box2d.b2Body_GetType(bodyId) === engine.box2d.b2BodyType.b2_kinematicBody;
++  return (
++    engine.fast.module._b2x_Body_GetType(bodyId.index1, rev(bodyId)) ===
++    engine.box2d.b2BodyType.b2_kinematicBody.value
++  );
+ }
+ 
+ function setLinearVelocity(engine: PhysicsEngine, bodyId: b2BodyId, x: number, y: number): void {
+-  const vec = scr_b2Vec2[0];
+-  vec.Set(x, y);
+-  engine.box2d.b2Body_SetLinearVelocity(bodyId, vec);
++  engine.fast.module._b2x_Body_SetLinearVelocity(bodyId.index1, rev(bodyId), x, y);
+ }
+ 
+ function wrap(value: number, min: number, max: number): number {
+-- 
+2.43.0
+

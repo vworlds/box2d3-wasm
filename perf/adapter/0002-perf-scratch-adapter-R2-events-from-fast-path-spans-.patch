@@ -1,0 +1,449 @@
+From 720e2be37fdf46c6c017b4f91bf7169941c4d1d6 Mon Sep 17 00:00:00 2001
+From: scratch <jm@peletier.com>
+Date: Mon, 12 Oct 2026 23:58:05 +0000
+Subject: [PATCH 2/7] perf: scratch adapter R2 - events from fast-path spans,
+ reused touched sets (local only)
+
+---
+ lib/vecs-physics/src/events/publish.ts        | 257 ++++++++++++------
+ .../tests/events/event_handles.test.ts        |  37 ++-
+ 2 files changed, 192 insertions(+), 102 deletions(-)
+
+diff --git a/lib/vecs-physics/src/events/publish.ts b/lib/vecs-physics/src/events/publish.ts
+index 2353edf..11ad0c1 100644
+--- a/lib/vecs-physics/src/events/publish.ts
++++ b/lib/vecs-physics/src/events/publish.ts
+@@ -2,20 +2,34 @@ import { Module, type EID, type Entity, type World } from "@vworlds/vecs";
+ 
+ import { ContactEvents, HitEvents, SensorEvents } from "./components.js";
+ import { getPhysicsEngine, PhysicsSystemTag, type PhysicsEngine } from "../adapter/engine.js";
+-import { type Box2DModule } from "../adapter/runtime.js";
+ import { PhysicsCoreModule } from "../core/module.js";
+ import { EventsModule } from "./module.js";
+ 
+-type ContactBeginEvent = ReturnType<
+-  ReturnType<Box2DModule["b2World_GetContactEvents"]>["GetBeginEvent"]
+->;
+-type ContactEndEvent = ReturnType<
+-  ReturnType<Box2DModule["b2World_GetContactEvents"]>["GetEndEvent"]
+->;
+-type ContactHitEvent = ReturnType<
+-  ReturnType<Box2DModule["b2World_GetContactEvents"]>["GetHitEvent"]
+->;
+-type SensorEvent = ReturnType<ReturnType<Box2DModule["b2World_GetSensorEvents"]>["GetBeginEvent"]>;
++/** Word offsets into the event records and span headers, from the fast path's generated layout. */
++interface EventOffsets {
++  contact: { beginPtr: number; beginCount: number; endPtr: number; endCount: number; hitPtr: number; hitCount: number };
++  sensor: { beginPtr: number; beginCount: number; endPtr: number; endCount: number };
++  begin: PairOffsets;
++  end: PairOffsets;
++  hit: HitOffsets;
++  sensorBegin: PairOffsets;
++  sensorEnd: PairOffsets;
++}
++
++/** Word stride of a record and word offsets of its two shape `index1` fields. */
++interface PairOffsets {
++  stride: number;
++  a: number;
++  b: number;
++}
++
++interface HitOffsets extends PairOffsets {
++  pointX: number;
++  pointY: number;
++  normalX: number;
++  normalY: number;
++  approachSpeed: number;
++}
+ 
+ export class EventPublishModule extends Module {
+   public init(): void {
+@@ -24,16 +38,22 @@ export class EventPublishModule extends Module {
+     world.module(EventsModule);
+ 
+     const engine = getPhysicsEngine(world);
++    const offsets = eventOffsets(engine);
++    // Scratch for the span headers, and the per-step touched sets, reused every step.
++    const spans = engine.fast.alloc(Math.max(engine.fast.layout.contactSpans.size, engine.fast.layout.sensorSpans.size));
++    const touchedContact = new Set<EID>();
++    const touchedSensor = new Set<EID>();
++    const touchedHit = new Set<EID>();
+     world
+       .system("PhysicsEvents")
+       .phase(engine.phases.postStep)
+       .run(() => {
+-        const touchedContact = new Set<EID>();
+-        const touchedSensor = new Set<EID>();
+-        const touchedHit = new Set<EID>();
++        clearSet(touchedContact);
++        clearSet(touchedSensor);
++        clearSet(touchedHit);
+ 
+-        publishContactAndHitEvents(world, engine, touchedContact, touchedHit);
+-        publishSensorEvents(world, engine, touchedSensor);
++        publishContactAndHitEvents(world, engine, spans, offsets, touchedContact, touchedHit);
++        publishSensorEvents(world, engine, spans, offsets, touchedSensor);
+ 
+         markModified(world, touchedContact, ContactEvents);
+         markModified(world, touchedSensor, SensorEvents);
+@@ -44,75 +64,115 @@ export class EventPublishModule extends Module {
+         clearUntouchedHitEvents(world, engine.prevTouchedHit, touchedHit);
+ 
+         // Store touched sets on engine for the next step's clear pass.
+-        engine.prevTouchedContact.clear();
+-        for (const eid of touchedContact) {
+-          engine.prevTouchedContact.add(eid);
+-        }
+-        engine.prevTouchedSensor.clear();
+-        for (const eid of touchedSensor) {
+-          engine.prevTouchedSensor.add(eid);
+-        }
+-        engine.prevTouchedHit.clear();
+-        for (const eid of touchedHit) {
+-          engine.prevTouchedHit.add(eid);
+-        }
++        copySet(engine.prevTouchedContact, touchedContact);
++        copySet(engine.prevTouchedSensor, touchedSensor);
++        copySet(engine.prevTouchedHit, touchedHit);
+       })
+       .add(PhysicsSystemTag);
+   }
+ }
+ 
+-// Contact begin/end and hit events all come from a single
+-// `b2World_GetContactEvents` poll, so fetch the event block once per step and
+-// fan begin/end into `touchedContact` and hits into `touchedHit` (ARCHITECTURE.md ->
+-// PhysicsEvents: "poll once per step").
+-// Contact begin and hit events are Embind class handles and are released below; contact end and
+-// sensor events are plain value objects, so there is nothing to delete for them.
++function eventOffsets(engine: PhysicsEngine): EventOffsets {
++  const L = engine.fast.layout;
++  const pair = (s: { size: number }, a: number, b: number): PairOffsets => ({
++    stride: s.size >> 2,
++    a: a >> 2,
++    b: b >> 2,
++  });
++  const words = <T extends Record<string, number>>(o: T): T =>
++    Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v >> 2])) as T;
++  return {
++    contact: words({
++      beginPtr: L.contactSpans.beginPtr,
++      beginCount: L.contactSpans.beginCount,
++      endPtr: L.contactSpans.endPtr,
++      endCount: L.contactSpans.endCount,
++      hitPtr: L.contactSpans.hitPtr,
++      hitCount: L.contactSpans.hitCount,
++    }),
++    sensor: words({
++      beginPtr: L.sensorSpans.beginPtr,
++      beginCount: L.sensorSpans.beginCount,
++      endPtr: L.sensorSpans.endPtr,
++      endCount: L.sensorSpans.endCount,
++    }),
++    begin: pair(L.contactBegin, L.contactBegin.shapeA, L.contactBegin.shapeB),
++    end: pair(L.contactEnd, L.contactEnd.shapeA, L.contactEnd.shapeB),
++    hit: {
++      ...pair(L.contactHit, L.contactHit.shapeA, L.contactHit.shapeB),
++      pointX: L.contactHit.pointX >> 2,
++      pointY: L.contactHit.pointY >> 2,
++      normalX: L.contactHit.normalX >> 2,
++      normalY: L.contactHit.normalY >> 2,
++      approachSpeed: L.contactHit.approachSpeed >> 2,
++    },
++    sensorBegin: pair(L.sensorBegin, L.sensorBegin.sensorShape, L.sensorBegin.visitorShape),
++    sensorEnd: pair(L.sensorEnd, L.sensorEnd.sensorShape, L.sensorEnd.visitorShape),
++  };
++}
++
++// Contact begin/end and hit events all come from one span poll per step (ARCHITECTURE.md ->
++// PhysicsEvents: "poll once per step"). The spans point into Box2D's own event arrays, valid
++// until the next step; records are read in place, in Box2D's order: begins, ends, hits.
+ function publishContactAndHitEvents(
+   world: World,
+   engine: PhysicsEngine,
++  spans: number,
++  offsets: EventOffsets,
+   touchedContact: Set<EID>,
+   touchedHit: Set<EID>
+ ): void {
+-  const events = engine.box2d.b2World_GetContactEvents(engine.worldId);
+-  try {
+-    for (let i = 0; i < events.beginCount; i++) {
+-      const event = events.GetBeginEvent(i);
+-      try {
+-        emitContactEvent(world, engine, touchedContact, event, "begin");
+-      } finally {
+-        deleteIfPresent(event);
+-      }
+-    }
++  const fast = engine.fast;
++  engine.box2d._b2x_World_GetContactSpans(engine.world, spans);
++  fast.sync();
++  const i32 = fast.i32;
++  const u32 = fast.u32;
++  const f32 = fast.f32;
++  const header = spans >> 2;
++  const c = offsets.contact;
++
++  const begin = offsets.begin;
++  let at = u32[header + c.beginPtr]! >> 2;
++  for (let i = 0, n = i32[header + c.beginCount]!; i < n; i++, at += begin.stride) {
++    emitContactEvent(world, engine, touchedContact, i32[at + begin.a]!, i32[at + begin.b]!, "begin");
++  }
+ 
+-    for (let i = 0; i < events.endCount; i++) {
+-      const event = events.GetEndEvent(i);
+-      emitContactEvent(world, engine, touchedContact, event, "end");
+-    }
++  const end = offsets.end;
++  at = u32[header + c.endPtr]! >> 2;
++  for (let i = 0, n = i32[header + c.endCount]!; i < n; i++, at += end.stride) {
++    emitContactEvent(world, engine, touchedContact, i32[at + end.a]!, i32[at + end.b]!, "end");
++  }
+ 
+-    for (let i = 0; i < events.hitCount; i++) {
+-      const event = events.GetHitEvent(i);
+-      try {
+-        emitHitEvent(world, engine, touchedHit, event);
+-      } finally {
+-        event.delete();
+-      }
+-    }
+-  } finally {
+-    events.delete();
++  const hit = offsets.hit;
++  at = u32[header + c.hitPtr]! >> 2;
++  for (let i = 0, n = i32[header + c.hitCount]!; i < n; i++, at += hit.stride) {
++    emitHitEvent(world, engine, touchedHit, i32, f32, at, hit);
+   }
+ }
+ 
+-function publishSensorEvents(world: World, engine: PhysicsEngine, touched: Set<EID>): void {
+-  const events = engine.box2d.b2World_GetSensorEvents(engine.worldId);
+-  try {
+-    for (let i = 0; i < events.beginCount; i++) {
+-      emitSensorEvent(world, engine, touched, events.GetBeginEvent(i), "begin");
+-    }
+-    for (let i = 0; i < events.endCount; i++) {
+-      emitSensorEvent(world, engine, touched, events.GetEndEvent(i), "end");
+-    }
+-  } finally {
+-    events.delete();
++function publishSensorEvents(
++  world: World,
++  engine: PhysicsEngine,
++  spans: number,
++  offsets: EventOffsets,
++  touched: Set<EID>
++): void {
++  const fast = engine.fast;
++  engine.box2d._b2x_World_GetSensorSpans(engine.world, spans);
++  const i32 = fast.i32;
++  const u32 = fast.u32;
++  const header = spans >> 2;
++  const s = offsets.sensor;
++
++  const begin = offsets.sensorBegin;
++  let at = u32[header + s.beginPtr]! >> 2;
++  for (let i = 0, n = i32[header + s.beginCount]!; i < n; i++, at += begin.stride) {
++    emitSensorEvent(world, engine, touched, i32[at + begin.a]!, i32[at + begin.b]!, "begin");
++  }
++  const end = offsets.sensorEnd;
++  at = u32[header + s.endPtr]! >> 2;
++  for (let i = 0, n = i32[header + s.endCount]!; i < n; i++, at += end.stride) {
++    emitSensorEvent(world, engine, touched, i32[at + end.a]!, i32[at + end.b]!, "end");
+   }
+ }
+ 
+@@ -120,11 +180,12 @@ function emitContactEvent(
+   world: World,
+   engine: PhysicsEngine,
+   touched: Set<EID>,
+-  event: ContactBeginEvent | ContactEndEvent,
++  shapeA: number,
++  shapeB: number,
+   kind: "begin" | "end"
+ ): void {
+-  const entityA = getLiveEntity(world, engine.entityByShapeIndex.get(event.shapeIdA.index1));
+-  const entityB = getLiveEntity(world, engine.entityByShapeIndex.get(event.shapeIdB.index1));
++  const entityA = getLiveEntity(world, engine.entityByShapeIndex.get(shapeA));
++  const entityB = getLiveEntity(world, engine.entityByShapeIndex.get(shapeB));
+   if (entityA === undefined || entityB === undefined) {
+     return;
+   }
+@@ -137,11 +198,12 @@ function emitSensorEvent(
+   world: World,
+   engine: PhysicsEngine,
+   touched: Set<EID>,
+-  event: SensorEvent,
++  sensorShape: number,
++  visitorShape: number,
+   kind: "begin" | "end"
+ ): void {
+-  const sensor = getLiveEntity(world, engine.entityByShapeIndex.get(event.sensorShapeId.index1));
+-  const visitor = getLiveEntity(world, engine.entityByShapeIndex.get(event.visitorShapeId.index1));
++  const sensor = getLiveEntity(world, engine.entityByShapeIndex.get(sensorShape));
++  const visitor = getLiveEntity(world, engine.entityByShapeIndex.get(visitorShape));
+   if (sensor === undefined || visitor === undefined) {
+     return;
+   }
+@@ -168,16 +230,33 @@ function emitHitEvent(
+   world: World,
+   engine: PhysicsEngine,
+   touched: Set<EID>,
+-  event: ContactHitEvent
++  i32: Int32Array,
++  f32: Float32Array,
++  at: number,
++  hit: HitOffsets
+ ): void {
+-  const entityA = getLiveEntity(world, engine.entityByShapeIndex.get(event.shapeIdA.index1));
+-  const entityB = getLiveEntity(world, engine.entityByShapeIndex.get(event.shapeIdB.index1));
++  const entityA = getLiveEntity(world, engine.entityByShapeIndex.get(i32[at + hit.a]!));
++  const entityB = getLiveEntity(world, engine.entityByShapeIndex.get(i32[at + hit.b]!));
+   if (entityA === undefined || entityB === undefined) {
+     return;
+   }
+ 
+-  emitHitToEntity(touched, entityA, entityB, event);
+-  emitHitToEntity(touched, entityB, entityA, event);
++  emitHitToEntity(touched, entityA, entityB, f32, at, hit);
++  emitHitToEntity(touched, entityB, entityA, f32, at, hit);
++}
++
++/** `Set.clear()` replaces V8's backing table; skip it when there is nothing to clear. */
++function clearSet(set: Set<EID>): void {
++  if (set.size > 0) {
++    set.clear();
++  }
++}
++
++function copySet(target: Set<EID>, source: Set<EID>): void {
++  clearSet(target);
++  for (const eid of source) {
++    target.add(eid);
++  }
+ }
+ 
+ function emitContactToEntity(
+@@ -208,7 +287,9 @@ function emitHitToEntity(
+   touched: Set<EID>,
+   entity: Entity,
+   other: Entity,
+-  event: ContactHitEvent
++  f32: Float32Array,
++  at: number,
++  hit: HitOffsets
+ ): void {
+   const events = entity.get(HitEvents) as HitEvents | undefined;
+   if (events === undefined) {
+@@ -222,11 +303,11 @@ function emitHitToEntity(
+ 
+   events.hits.push({
+     other,
+-    x: event.point.x,
+-    y: event.point.y,
+-    normalX: event.normal.x,
+-    normalY: event.normal.y,
+-    speed: event.approachSpeed,
++    x: f32[at + hit.pointX]!,
++    y: f32[at + hit.pointY]!,
++    normalX: f32[at + hit.normalX]!,
++    normalY: f32[at + hit.normalY]!,
++    speed: f32[at + hit.approachSpeed]!,
+   });
+ }
+ 
+@@ -302,10 +383,6 @@ function clearUntouchedHitEvents(
+   }
+ }
+ 
+-function deleteIfPresent(value: { delete?: () => void }): void {
+-  value.delete?.();
+-}
+-
+ function isDestroyed(entity: Entity): boolean {
+   return entity.destroyed;
+ }
+diff --git a/lib/vecs-physics/tests/events/event_handles.test.ts b/lib/vecs-physics/tests/events/event_handles.test.ts
+index c0a356d..32639e7 100644
+--- a/lib/vecs-physics/tests/events/event_handles.test.ts
++++ b/lib/vecs-physics/tests/events/event_handles.test.ts
+@@ -90,7 +90,7 @@ function trackOwnedHandles(box2d: object) {
+ const STEP_MS = 1000 / 60;
+ 
+ describe("physics event handles", () => {
+-  it("releases every owned handle created by contact, sensor, hit and body events", () => {
++  it("delivers contact, sensor, hit and body events without any Embind event call", () => {
+     const world = new World();
+     world.module(PhysicsModule, { gravity: { x: 0, y: 0 }, hitEventThreshold: 0.5 });
+     const engine = getPhysicsEngine(world);
+@@ -118,24 +118,40 @@ describe("physics event handles", () => {
+       .entity()
+       .set(Body, { type: BodyType.Static })
+       .set(Position, { x: 1.5, y: 11 });
+-    world.entity().childOf(sensorWall).set(Box, { hx: 0.5, hy: 10 }).add(SensorEvents);
++    const sensorWallShape = world
++      .entity()
++      .childOf(sensorWall)
++      .set(Box, { hx: 0.5, hy: 10 })
++      .add(SensorEvents);
+     const bullet = world
+       .entity()
+       .set(Body, { type: BodyType.Dynamic })
+       .set(Position, { x: 7.39814, y: 4 })
+       .set(LinearVelocity, { x: -20, y: 0 });
+-    world.entity().childOf(bullet).set(Circle, { radius: 0.1 }).add(Sensor).add(SensorEvents);
++    const bulletShape = world
++      .entity()
++      .childOf(bullet)
++      .set(Circle, { radius: 0.1 })
++      .add(Sensor)
++      .add(SensorEvents);
+ 
+     world.progress(0, STEP_MS);
+     const { live, created, plain } = trackOwnedHandles(engine.box2d);
+ 
+     let sawBegin = false;
+     let sawEnd = false;
++    let sawHit = false;
++    let sawSensor = false;
+     for (let tick = 1; tick <= 240; tick++) {
+       world.progress(tick * STEP_MS, STEP_MS);
+       const events = wallShape.get(ContactEvents)!;
+       sawBegin ||= events.begin.length > 0;
+       sawEnd ||= events.end.length > 0;
++      sawHit ||= wallShape.get(HitEvents)!.hits.length > 0;
++      for (const shape of [sensorWallShape, bulletShape]) {
++        const sensorEvents = shape.get(SensorEvents)!;
++        sawSensor ||= sensorEvents.begin.length + sensorEvents.end.length > 0;
++      }
+       if (tick === 60) {
+         mover.set(LinearVelocity, { x: 10, y: 0 });
+       }
+@@ -143,15 +159,12 @@ describe("physics event handles", () => {
+ 
+     expect(sawBegin).toBe(true);
+     expect(sawEnd).toBe(true);
+-    // Contact begin events are class handles; contact end and sensor begin/end events are plain
+-    // value objects that need no release. If a binding change turns one into a handle, `live`
+-    // below fails until publish.ts releases it.
+-    expect(created.get("GetBeginEvent")).toBe(1);
+-    expect(plain.get("GetBeginEvent")).toBeGreaterThan(0);
+-    expect(plain.get("GetEndEvent")).toBeGreaterThan(1);
+-    expect(created.get("GetHitEvent")).toBeGreaterThan(0);
+-    // Pose-out exports moves through the fast path: no move-event handle is ever created.
+-    expect(created.get("GetMoveEvent")).toBeUndefined();
++    expect(sawHit).toBe(true);
++    expect(sawSensor).toBe(true);
++    // Events are read from the fast path's spans and moves from its export: the Embind event
++    // polling APIs are never called, so no event handle or value object is ever created.
++    expect([...created.keys()]).toEqual([]);
++    expect([...plain.keys()]).toEqual([]);
+     expect(live.size).toBe(0);
+   });
+ });
+-- 
+2.43.0
+

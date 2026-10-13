@@ -1,5 +1,11 @@
 # box2d3-wasm
 
+> **vworlds fork: `@vworlds/box2d3-wasm`.** Upstream box2d3-wasm 5.2.0 plus a zero-allocation
+> fast path (`box2d3-wasm/fastpath`, raw `b2x_` exports: bulk move export, zero-copy event spans,
+> scalar/out-parameter body calls, a profile-timer switch) with bit-identical results. The embind
+> API is unchanged. See [docs/fastpath.md](docs/fastpath.md), [../PATCHES.md](../PATCHES.md) and
+> [../REPORT.md](../REPORT.md).
+
 [Box2D v3][] ported to the web via [wasm][]!
 
 ## Online Demos

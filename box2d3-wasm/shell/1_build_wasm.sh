@@ -59,12 +59,14 @@ EMCC_OPTS=(
   -s FILESYSTEM=0
   # -s SUPPORT_LONGJMP=0 # this causes 'undefined symbol: _emscripten_stack_restore'
   -s EXPORTED_FUNCTIONS=_malloc,_free
-  -s EXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU16,HEAPU32
+  -s EXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU16,HEAPU32,HEAP32,HEAPF32,wasmMemory
   -s ALLOW_MEMORY_GROWTH=1
   -s EXPORT_ES6=1
   ${FLAVOUR_EMCC_OPTS[@]}
   ${FLAVOUR_LINK_OPTS[@]}
   )
+# Optional extra emcc flags, e.g. EXTRA_EMCC_OPTS="--profiling-funcs" for a profiling variant.
+read -r -a EXTRA_OPTS <<< "${EXTRA_EMCC_OPTS:-}"
 DEBUG_OPTS=(
   -g3
   -gsource-map
@@ -112,7 +114,7 @@ case "$TARGET_TYPE" in
       ${RELEASE_OPTS[@]}
       ${MINIFICATION_OPTS[@]}
       -flto
-      -s EXPORTED_RUNTIME_METHODS=['HEAPU8','HEAPU16','HEAPU32','stackSave','stackRestore','stackAlloc']
+      -s EXPORTED_RUNTIME_METHODS=['HEAPU8','HEAPU16','HEAPU32','HEAP32','HEAPF32','wasmMemory','stackSave','stackRestore','stackAlloc']
       -s STACK_OVERFLOW_CHECK=2
       )
     ;;
@@ -138,12 +140,15 @@ emcc -lembind \
 "$CSRC_DIR/glue.cpp" \
 "$CSRC_DIR/threading.cpp" \
 "$CSRC_DIR/debugDraw.cpp" \
+"$CSRC_DIR/fastpath.cpp" \
+"$CSRC_DIR/fastpath_body.gen.cpp" \
 "$ENKITS_DIR/src/TaskScheduler.cpp" \
 "$CMAKEBUILD_DIR/src/$LIBARCHIVE" \
 -I "$BOX2D_DIR/include" \
 -I "$ENKITS_DIR/src" \
 -I "$B2CPP_DIR/include" \
 "${EMCC_OPTS[@]}" \
+"${EXTRA_OPTS[@]}" \
 -o "$ES_FILE" \
 --emit-tsd "$ES_TSD"
 { set +x; } 2>/dev/null
@@ -169,6 +174,8 @@ case "$FLAVOUR" in
     ;;
 esac
 awk -f "$DIR/modify_emscripten_dts.awk" -v template="$BUILD_DIR/Box2D.template.d.ts" "$ES_TSD_PRECURSOR" > "$ES_TSD"
+# flavour-independent fast-path helper
+cp "$B2D_WASM_DIR/src/fastpath.mjs" "$B2D_WASM_DIR/src/fastpath.d.ts" "$B2D_WASM_DIR/src/fastpath_body.gen.d.ts" "$BUILD_DIR/dist/es/"
 
 { set +x; } 2>/dev/null
 >&2 echo -e "${Green}Successfully built $ES_DIR/$BASENAME.{js,wasm}${NC}\n"

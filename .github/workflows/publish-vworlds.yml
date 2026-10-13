@@ -1,0 +1,81 @@
+# Build @vworlds/box2d3-wasm (both flavours, Release), prove the fast path against the embind API,
+# and publish the version in box2d3-wasm/package.json (no version bump).
+#
+# registry=github publishes to GitHub Packages with the workflow's own token (needs Actions
+# enabled on the fork). registry=npmjs publishes to npmjs.org and needs an NPM_TOKEN secret with
+# publish rights on the @vworlds scope. action=pack only uploads the tarball as an artifact.
+name: Publish @vworlds/box2d3-wasm
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "pack or publish"
+        required: true
+        type: choice
+        options: [pack, publish]
+        default: pack
+      registry:
+        description: "registry to publish to"
+        required: true
+        type: choice
+        options: [github, npmjs]
+        default: github
+
+env:
+  EM_VERSION: 4.0.18
+  EM_CACHE_FOLDER: "emsdk-cache"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.EM_CACHE_FOLDER }}
+          key: ${{ env.EM_VERSION }}-${{ runner.os }}
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EM_VERSION }}
+          actions-cache-folder: ${{ env.EM_CACHE_FOLDER }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: ${{ github.event.inputs.registry == 'npmjs' && 'https://registry.npmjs.org' || 'https://npm.pkg.github.com' }}
+          scope: "@vworlds"
+      # emcc --emit-tsd fails with TypeScript 6 (TS5101); pin TypeScript 5.
+      - run: npm i -g typescript@5.9 yarn
+      - run: npm ci
+        working-directory: box2d3-wasm
+      - name: generated fast-path code is current
+        run: python3 box2d3-wasm/tools/gen_fastpath.py --check
+      - name: build deluxe and compat (Release)
+        run: FLAVOURS="deluxe compat" REBUILD_LIB=1 TARGET_TYPE=Release perf/build-variant.sh build-out
+      - name: fast path equals the embind API (deluxe and compat)
+        run: |
+          BOX2D_ENTRY=build-out/entry.mjs node perf/tests/fastpath-differential.mjs
+          BOX2D_FLAVOUR_FILE=build-out/compat/Box2D.compat.mjs node perf/tests/fastpath-differential.mjs
+      - name: copy demo utils into the package
+        run: |
+          mkdir -p box2d3-wasm/build/dist/es/utils
+          cp demo/utils/*.mjs demo/utils/*.d.ts box2d3-wasm/build/dist/es/utils/
+      - name: pack
+        working-directory: box2d3-wasm
+        run: npm pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vworlds-box2d3-wasm
+          path: box2d3-wasm/*.tgz
+      - name: publish
+        if: github.event.inputs.action == 'publish'
+        working-directory: box2d3-wasm
+        run: npm publish ${{ github.event.inputs.registry == 'npmjs' && '--provenance' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ github.event.inputs.registry == 'npmjs' && secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}

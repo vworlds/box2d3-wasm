@@ -1,0 +1,509 @@
+From 02eb5bfac49dede6f10b7c813c55ae6d31619092 Mon Sep 17 00:00:00 2001
+From: scratch <jm@peletier.com>
+Date: Mon, 12 Oct 2026 23:35:56 +0000
+Subject: [PATCH 1/7] perf: scratch adapter R1 - fast-path step and bulk
+ pose-out (local only, never push)
+
+---
+ lib/vecs-physics/src/adapter/engine.ts        |  18 ++-
+ lib/vecs-physics/src/adapter/runtime.ts       |  13 ++
+ lib/vecs-physics/src/body/pose_out.ts         | 129 +++++++++---------
+ lib/vecs-physics/src/core/module.ts           |   6 +-
+ lib/vecs-physics/src/core/step.ts             |   2 +-
+ .../tests/events/event_handles.test.ts        |   3 +-
+ .../tests/lifecycle/pose_out_handles.test.ts  | 123 +++++++----------
+ 7 files changed, 149 insertions(+), 145 deletions(-)
+
+diff --git a/lib/vecs-physics/src/adapter/engine.ts b/lib/vecs-physics/src/adapter/engine.ts
+index 05b79b2..565f9a4 100644
+--- a/lib/vecs-physics/src/adapter/engine.ts
++++ b/lib/vecs-physics/src/adapter/engine.ts
+@@ -1,6 +1,8 @@
+ import { ArrayMap, type EID, type Entity, type World } from "@vworlds/vecs";
+ 
+ import { type WarnSink, WarnDedupe } from "../util/warn.js";
++import { type FastPath, type MoveExporter } from "box2d3-wasm/fastpath";
++
+ import { type PhysicsQueries } from "./queries.js";
+ import { type Box2DModule } from "./runtime.js";
+ 
+@@ -72,7 +74,13 @@ export function hasPhysicsEngine(world: World): boolean {
+ 
+ export class PhysicsEngine {
+   public worldId!: b2WorldId;
++  /** `worldId` packed for the b2x_ fast path: index1 | generation << 16. */
++  public world = 0;
+   public readonly box2d!: Box2DModule;
++  /** The b2x_ fast path: raw exports, layouts and whole-memory views. */
++  public readonly fast!: FastPath;
++  /** Reusable buffer that `PhysicsPoseSyncOut` exports the move events into. */
++  public moveExporter!: MoveExporter;
+   public readonly phases!: PhysicsPhases;
+ 
+   // Resolved configuration (flattened from PhysicsOptions).
+@@ -156,19 +164,25 @@ export class PhysicsEngine {
+     box2d: Box2DModule,
+     options: ResolvedPhysicsOptions,
+     phases: PhysicsPhases,
+-    warnSink?: WarnSink
++    warnSink?: WarnSink,
++    fast?: FastPath
+   );
+   public constructor(
+     box2d?: Box2DModule,
+     options?: ResolvedPhysicsOptions,
+     phases?: PhysicsPhases,
+-    warnSink?: WarnSink
++    warnSink?: WarnSink,
++    fast?: FastPath
+   ) {
+     if (box2d === undefined || options === undefined || phases === undefined) {
+       return;
+     }
+ 
+     this.box2d = box2d;
++    if (fast !== undefined) {
++      this.fast = fast;
++      this.moveExporter = fast.createMoveExporter(64);
++    }
+     this.phases = phases;
+     this.gravityX = options.gravityX;
+     this.gravityY = options.gravityY;
+diff --git a/lib/vecs-physics/src/adapter/runtime.ts b/lib/vecs-physics/src/adapter/runtime.ts
+index eadb1dc..b794795 100644
+--- a/lib/vecs-physics/src/adapter/runtime.ts
++++ b/lib/vecs-physics/src/adapter/runtime.ts
+@@ -1,6 +1,7 @@
+ import { cpus } from "node:os";
+ 
+ import Box2DFactory from "box2d3-wasm";
++import { createFastPath, type FastPath } from "box2d3-wasm/fastpath";
+ 
+ import type { b2AABB, b2QueryFilter, b2ShapeProxy, b2Vec2 } from "./engine.js";
+ 
+@@ -8,6 +9,7 @@ export type Box2DModule = Awaited<ReturnType<typeof Box2DFactory>>;
+ 
+ let modulePromise: Promise<Box2DModule> | null = null;
+ let module: Box2DModule | null = null;
++let fastPath: FastPath | null = null;
+ 
+ // Global scratch pools for common Box2D structs. Allocated once at module load,
+ // reused across queries and other non-reentrant operations.
+@@ -30,6 +32,7 @@ export async function preloadPhysics(): Promise<void> {
+ 
+   modulePromise = Box2DFactory().then((loadedModule) => {
+     module = loadedModule;
++    fastPath = createFastPath(loadedModule);
+     initializeScratchPools(loadedModule);
+     return loadedModule;
+   });
+@@ -71,3 +74,13 @@ export function getBox2D(): Box2DModule {
+   }
+   return module;
+ }
++
++/** The b2x_ fast path over the loaded module: raw exports, struct layouts, memory views. */
++export function getFastPath(): FastPath {
++  if (!fastPath) {
++    throw new Error(
++      "Box2D module not loaded. Call `await preloadPhysics()` before `world.module(PhysicsModule)`."
++    );
++  }
++  return fastPath;
++}
+diff --git a/lib/vecs-physics/src/body/pose_out.ts b/lib/vecs-physics/src/body/pose_out.ts
+index e97e971..66d99dd 100644
+--- a/lib/vecs-physics/src/body/pose_out.ts
++++ b/lib/vecs-physics/src/body/pose_out.ts
+@@ -1,12 +1,6 @@
+ import { Module, type Entity } from "@vworlds/vecs";
+ 
+-import {
+-  getPhysicsEngine,
+-  PhysicsSystemTag,
+-  type b2BodyId,
+-  type PhysicsEngine,
+-} from "../adapter/engine.js";
+-import { type Box2DModule } from "../adapter/runtime.js";
++import { getPhysicsEngine, PhysicsSystemTag } from "../adapter/engine.js";
+ import {
+   AngularVelocity,
+   Body,
+@@ -17,59 +11,71 @@ import {
+ } from "./components.js";
+ import { PhysicsCoreModule } from "../core/module.js";
+ 
+-type b2Transform = ReturnType<Box2DModule["b2World_GetBodyEvents"]>["GetMoveEvent"] extends (
+-  ...args: never[]
+-) => infer Move
+-  ? Move extends { transform: infer T }
+-    ? T
+-    : never
+-  : never;
+-
+ export class BodyPoseOutModule extends Module {
+   public init(): void {
+     const world = this.world;
+     world.module(PhysicsCoreModule);
+ 
+     const engine = getPhysicsEngine(world);
++    const fast = engine.fast;
++    const layout = fast.layout;
++    const move = layout.move;
++    const offsets: MoveOffsets = {
++      bodyIndex: move.bodyIndex >> 2,
++      x: move.x >> 2,
++      y: move.y >> 2,
++      angle: move.angle >> 2,
++      vx: move.vx >> 2,
++      vy: move.vy >> 2,
++      w: move.w >> 2,
++    };
++    const flags = layout.constants.exportVelocity;
+     world
+       .system("PhysicsPoseSyncOut")
+       .phase(engine.phases.postStep)
+       .run(() => {
+-        const bodyEvents = engine.box2d.b2World_GetBodyEvents(engine.worldId);
+-        try {
+-          for (let i = 0; i < bodyEvents.moveCount; i++) {
+-            const move = bodyEvents.GetMoveEvent(i);
+-            try {
+-              const bodyId = move.bodyId;
+-              const entityId = engine.entityByBodyIndex.get(bodyId.index1);
+-              if (entityId === undefined) {
+-                continue;
+-              }
+-
+-              // A postStep system may destroy an entity after Box2D produced this event.
+-              // Keep the reverse slot until the reaper frees the body; lookup is O(1).
+-              const entity = world.getEntity(entityId);
+-              if (entity === undefined || entity.destroyed) {
+-                continue;
+-              }
+-              const body = entity.get(Body);
+-              if (body?.type !== BodyType.Dynamic) {
+-                continue;
+-              }
++        // One crossing exports every move event (Box2D's order) with its angle and velocities.
++        const exporter = engine.moveExporter;
++        const count = exporter.exportMoves(engine.world, flags);
++        const i32 = fast.i32;
++        const f32 = fast.f32;
++        const stride = exporter.stride;
++        let base = exporter.base;
++        for (let i = 0; i < count; i++, base += stride) {
++          const entityId = engine.entityByBodyIndex.get(i32[base + offsets.bodyIndex]);
++          if (entityId === undefined) {
++            continue;
++          }
+ 
+-              writePose(engine, entity, move.transform, bodyId);
+-            } finally {
+-              move.delete();
+-            }
++          // A postStep system may destroy an entity after Box2D produced this event.
++          // Keep the reverse slot until the reaper frees the body; lookup is O(1).
++          const entity = world.getEntity(entityId);
++          if (entity === undefined || entity.destroyed) {
++            continue;
+           }
+-        } finally {
+-          bodyEvents.delete();
++          const body = entity.get(Body);
++          if (body?.type !== BodyType.Dynamic) {
++            continue;
++          }
++
++          writePose(entity, f32, base, offsets);
+         }
+       })
+       .add(PhysicsSystemTag);
+   }
+ }
+ 
++/** Word offsets of the b2xMove fields pose-out reads, from the fast path's generated layout. */
++interface MoveOffsets {
++  bodyIndex: number;
++  x: number;
++  y: number;
++  angle: number;
++  vx: number;
++  vy: number;
++  w: number;
++}
++
+ /**
+  * Copy one moved body's Box2D pose into its pose components, writing only the components whose
+  * values changed.
+@@ -92,22 +98,14 @@ export class BodyPoseOutModule extends Module {
+  * nothing per body: the new values are read into locals and compared directly, and the `{ x, y }`
+  * literals exist only on the write path.
+  *
+- * Embind handle rules, which the compare must keep: `move.transform`, `.p` and `.q` are views into
+- * the move event's own memory (same address on every read, `transform.p` even shares the
+- * transform's), not copies. Read each once and leave them alone: calling `delete()` on a view runs
+- * the C++ destructor on an interior pointer of the event, which corrupts the wasm heap. The event's
+- * single `move.delete()` releases the memory. The linear velocity is a by-value return, a heap copy
+- * this function owns and deletes.
++ * The values come from the move record `b2x_World_ExportMoves` wrote for this body: the transform,
++ * the angle (`b2Rot_GetAngle`, the same `b2Atan2` embind's `GetAngle` runs) and both velocities
++ * (`b2Body_GetLinearVelocity` / `b2Body_GetAngularVelocity`), read in wasm right after the step.
++ * They are the f32 values the embind getters returned, read without a handle or an allocation.
+  */
+-function writePose(
+-  engine: PhysicsEngine,
+-  entity: Entity,
+-  transform: b2Transform,
+-  bodyId: b2BodyId
+-): void {
+-  const p = transform.p;
+-  const x = p.x;
+-  const y = p.y;
++function writePose(entity: Entity, f32: Float32Array, base: number, offsets: MoveOffsets): void {
++  const x = f32[base + offsets.x]!;
++  const y = f32[base + offsets.y]!;
+   const position = entity.get(Position);
+   if (position === undefined || position.x !== x || position.y !== y) {
+     entity.set(Position, { x, y });
+@@ -115,7 +113,7 @@ function writePose(
+ 
+   const rotation = entity.get(Rotation);
+   if (rotation !== undefined) {
+-    const angle = transform.q.GetAngle();
++    const angle = f32[base + offsets.angle]!;
+     if (rotation.angle !== angle) {
+       entity.set(Rotation, { angle });
+     }
+@@ -123,21 +121,16 @@ function writePose(
+ 
+   const linearVelocity = entity.get(LinearVelocity);
+   if (linearVelocity !== undefined) {
+-    const linear = engine.box2d.b2Body_GetLinearVelocity(bodyId);
+-    try {
+-      const vx = linear.x;
+-      const vy = linear.y;
+-      if (linearVelocity.x !== vx || linearVelocity.y !== vy) {
+-        entity.set(LinearVelocity, { x: vx, y: vy });
+-      }
+-    } finally {
+-      linear.delete();
++    const vx = f32[base + offsets.vx]!;
++    const vy = f32[base + offsets.vy]!;
++    if (linearVelocity.x !== vx || linearVelocity.y !== vy) {
++      entity.set(LinearVelocity, { x: vx, y: vy });
+     }
+   }
+ 
+   const angularVelocity = entity.get(AngularVelocity);
+   if (angularVelocity !== undefined) {
+-    const value = engine.box2d.b2Body_GetAngularVelocity(bodyId);
++    const value = f32[base + offsets.w]!;
+     if (angularVelocity.value !== value) {
+       entity.set(AngularVelocity, { value });
+     }
+diff --git a/lib/vecs-physics/src/core/module.ts b/lib/vecs-physics/src/core/module.ts
+index 18946e5..03ebd5b 100644
+--- a/lib/vecs-physics/src/core/module.ts
++++ b/lib/vecs-physics/src/core/module.ts
+@@ -15,7 +15,7 @@ import {
+   type ResolvedPhysicsOptions,
+ } from "../adapter/engine.js";
+ import { withAllocated } from "../adapter/disposal.js";
+-import { getBox2D } from "../adapter/runtime.js";
++import { getBox2D, getFastPath } from "../adapter/runtime.js";
+ 
+ /** Options for {@link import("../module.js").PhysicsModule}. Every field is optional;
+  * omitted fields fall back to Box2D-aligned defaults. */
+@@ -76,8 +76,10 @@ export class PhysicsCoreModule extends Module<PhysicsOptions | undefined> {
+ 
+     const box2d = getBox2D();
+     const resolved = resolveOptions(opts);
+-    const engine = new PhysicsEngine(box2d, resolved, phases, opts.debugSink);
++    const fast = getFastPath();
++    const engine = new PhysicsEngine(box2d, resolved, phases, opts.debugSink, fast);
+     engine.worldId = createWorldId(engine, resolved);
++    engine.world = fast.world(engine.worldId);
+     world.component(PhysicsEngine).add(Singleton);
+     world.component(PhysicsEngine).attach(PhysicsEngine, engine);
+   }
+diff --git a/lib/vecs-physics/src/core/step.ts b/lib/vecs-physics/src/core/step.ts
+index e971cbc..4c6d52a 100644
+--- a/lib/vecs-physics/src/core/step.ts
++++ b/lib/vecs-physics/src/core/step.ts
+@@ -21,7 +21,7 @@ export class PhysicsStepModule extends Module {
+               `physics expects a fixed delta.`
+           );
+         }
+-        engine.box2d.b2World_Step(engine.worldId, engine.fixedTimeStep, engine.subSteps);
++        engine.box2d._b2x_World_Step(engine.world, engine.fixedTimeStep, engine.subSteps);
+       })
+       .add(PhysicsSystemTag);
+   }
+diff --git a/lib/vecs-physics/tests/events/event_handles.test.ts b/lib/vecs-physics/tests/events/event_handles.test.ts
+index 74f63e5..c0a356d 100644
+--- a/lib/vecs-physics/tests/events/event_handles.test.ts
++++ b/lib/vecs-physics/tests/events/event_handles.test.ts
+@@ -150,7 +150,8 @@ describe("physics event handles", () => {
+     expect(plain.get("GetBeginEvent")).toBeGreaterThan(0);
+     expect(plain.get("GetEndEvent")).toBeGreaterThan(1);
+     expect(created.get("GetHitEvent")).toBeGreaterThan(0);
+-    expect(created.get("GetMoveEvent")).toBeGreaterThan(0);
++    // Pose-out exports moves through the fast path: no move-event handle is ever created.
++    expect(created.get("GetMoveEvent")).toBeUndefined();
+     expect(live.size).toBe(0);
+   });
+ });
+diff --git a/lib/vecs-physics/tests/lifecycle/pose_out_handles.test.ts b/lib/vecs-physics/tests/lifecycle/pose_out_handles.test.ts
+index 26bc7a3..4bca8f3 100644
+--- a/lib/vecs-physics/tests/lifecycle/pose_out_handles.test.ts
++++ b/lib/vecs-physics/tests/lifecycle/pose_out_handles.test.ts
+@@ -13,81 +13,42 @@ import {
+ } from "../../src/index.js";
+ import { getPhysicsEngine } from "../../src/adapter/engine.js";
+ 
+-type Handle = { delete: () => void };
+-
+-function isHandle(value: unknown): value is Handle {
+-  return typeof value === "object" && value !== null && "delete" in value;
+-}
+-
+-describe("PhysicsPoseSyncOut Embind handles", () => {
+-  it("creates five handles per moved body and reads each struct view once", () => {
++describe("PhysicsPoseSyncOut fast path", () => {
++  it("exports moves in one crossing per step and creates no Embind handles", () => {
+     const world = new World();
+     world.module(PhysicsModule, { gravity: { x: 0, y: -3 } });
+     const engine = getPhysicsEngine(world);
+     const bodyCount = 4;
++    const bodies = [];
+     for (let i = 0; i < bodyCount; i++) {
+-      world
+-        .entity()
+-        .set(Body, { type: BodyType.Dynamic })
+-        .set(Position, { x: i * 2, y: 5 })
+-        .set(Rotation, { angle: 0.2 })
+-        .set(LinearVelocity, { x: 1, y: 1 })
+-        .set(AngularVelocity, { value: 1 })
+-        .set(Box, { width: 1, height: 1 });
++      bodies.push(
++        world
++          .entity()
++          .set(Body, { type: BodyType.Dynamic })
++          .set(Position, { x: i * 2, y: 5 })
++          .set(Rotation, { angle: 0.2 })
++          .set(LinearVelocity, { x: 1, y: 1 })
++          .set(AngularVelocity, { value: 1 })
++          .set(Box, { width: 1, height: 1 })
++      );
+     }
+     world.progress(0, 16);
+ 
+-    // Count every class handle the body-events API hands out while the system runs.
++    // Count calls into the body-event and velocity APIs, Embind and fast path alike.
+     const box2d = engine.box2d as unknown as Record<string, (...args: unknown[]) => unknown>;
+-    const handleCounts = new Map<string, number>();
+-    const patched = new Set<object>();
+-    const track = (name: string, value: unknown): unknown => {
+-      if (isHandle(value)) {
+-        handleCounts.set(name, (handleCounts.get(name) ?? 0) + 1);
+-        patchPrototypeChain(Object.getPrototypeOf(value));
+-      }
+-      return value;
+-    };
+-    const patchPrototypeChain = (proto: object | null): void => {
+-      if (proto === null || proto === Object.prototype || patched.has(proto)) {
+-        return;
+-      }
+-      patched.add(proto);
+-      patchPrototypeChain(Object.getPrototypeOf(proto));
+-      for (const key of Object.getOwnPropertyNames(proto)) {
+-        const descriptor = Object.getOwnPropertyDescriptor(proto, key)!;
+-        if (descriptor.get !== undefined) {
+-          const getter = descriptor.get;
+-          Object.defineProperty(proto, key, {
+-            ...descriptor,
+-            get(this: unknown) {
+-              return track(key, getter.call(this));
+-            },
+-          });
+-        } else if (
+-          typeof descriptor.value === "function" &&
+-          !["constructor", "delete", "isDeleted", "clone", "isAliasOf"].includes(key) &&
+-          !key.startsWith("deleteLater") &&
+-          !key.startsWith("isDeletedLater")
+-        ) {
+-          const method = descriptor.value as (...args: unknown[]) => unknown;
+-          Object.defineProperty(proto, key, {
+-            ...descriptor,
+-            value(this: unknown, ...args: unknown[]) {
+-              return track(key, method.apply(this, args));
+-            },
+-          });
+-        }
+-      }
+-    };
+-
+-    let moves = 0;
+-    for (const name of ["b2World_GetBodyEvents", "b2Body_GetLinearVelocity"]) {
+-      const original = box2d[name];
++    const calls = new Map<string, number>();
++    for (const name of [
++      "b2World_GetBodyEvents",
++      "b2Body_GetLinearVelocity",
++      "b2Body_GetAngularVelocity",
++      "b2Body_GetPosition",
++      "b2Body_GetRotation",
++      "_b2x_World_ExportMoves",
++    ]) {
++      const original = box2d[name]!;
+       box2d[name] = (...args: unknown[]) => {
+-        const result = track(name, original.apply(box2d, args)) as { moveCount?: number };
+-        moves += result?.moveCount ?? 0;
+-        return result;
++        calls.set(name, (calls.get(name) ?? 0) + 1);
++        return original.apply(box2d, args);
+       };
+     }
+ 
+@@ -96,11 +57,31 @@ describe("PhysicsPoseSyncOut Embind handles", () => {
+       world.progress(tick * 16, 16);
+     }
+ 
+-    expect(moves).toBe(bodyCount * ticks);
+-    expect(handleCounts.get("GetMoveEvent")).toBe(moves);
+-    expect(handleCounts.get("transform")).toBe(moves);
+-    expect(handleCounts.get("p")).toBe(moves);
+-    expect(handleCounts.get("q")).toBe(moves);
+-    expect(handleCounts.get("b2Body_GetLinearVelocity")).toBe(moves);
++    expect(calls.get("_b2x_World_ExportMoves")).toBe(ticks);
++    expect(calls.get("b2World_GetBodyEvents")).toBeUndefined();
++    expect(calls.get("b2Body_GetLinearVelocity")).toBeUndefined();
++    expect(calls.get("b2Body_GetAngularVelocity")).toBeUndefined();
++    expect(calls.get("b2Body_GetPosition")).toBeUndefined();
++    expect(calls.get("b2Body_GetRotation")).toBeUndefined();
++
++    // The components hold exactly what the Embind getters report.
++    for (const entity of bodies) {
++      const bodyId = entity.get(Body)!._bodyId!;
++      const p = engine.box2d.b2Body_GetPosition(bodyId);
++      const q = engine.box2d.b2Body_GetRotation(bodyId);
++      const v = engine.box2d.b2Body_GetLinearVelocity(bodyId);
++      try {
++        expect(entity.get(Position)).toMatchObject({ x: p.x, y: p.y });
++        expect(entity.get(Rotation)!.angle).toBe(q.GetAngle());
++        expect(entity.get(LinearVelocity)).toMatchObject({ x: v.x, y: v.y });
++        expect(entity.get(AngularVelocity)!.value).toBe(
++          engine.box2d.b2Body_GetAngularVelocity(bodyId)
++        );
++      } finally {
++        p.delete();
++        q.delete();
++        v.delete();
++      }
++    }
+   });
+ });
+-- 
+2.43.0
+
