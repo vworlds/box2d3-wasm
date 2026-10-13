@@ -1,0 +1,94 @@
+name: vecs nightly
+
+# Builds dev and runs the vecs suites against the HEAD of vecs's dev branch. When they pass and
+# that commit differs from ci/vecs-ref, opens (or updates) a pull request that moves the pin.
+# When they fail, the run fails and GitHub notifies the owner.
+#
+# Repository setting required for the pull request step: Settings > Actions > General >
+# Workflow permissions > "Allow GitHub Actions to create and approve pull requests". Without it
+# the step fails with "GitHub Actions is not permitted to create or approve pull requests".
+# (Pull requests opened with GITHUB_TOKEN do not start the CI workflow by themselves; see
+# docs/releasing.md.)
+
+on:
+  schedule:
+    - cron: "37 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: vecs-nightly
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      VECS_READ_TOKEN: ${{ secrets.VECS_READ_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Is VECS_READ_TOKEN available?
+        id: gate
+        run: |
+          if [ -n "$VECS_READ_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=vecs nightly skipped::The secret VECS_READ_TOKEN is not available, so the private vecs repository cannot be checked out. See docs/releasing.md."
+          fi
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          ref: dev
+          submodules: true
+
+      - uses: ./.github/actions/build
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          repository: vworlds/vecs
+          ref: dev
+          token: ${{ secrets.VECS_READ_TOKEN }}
+          path: vecs
+          persist-credentials: false
+
+      - name: Pack the package
+        if: steps.gate.outputs.enabled == 'true'
+        run: npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+
+      - name: Run the vecs suites
+        if: steps.gate.outputs.enabled == 'true'
+        run: scripts/run-vecs-suites.sh vecs "$RUNNER_TEMP"/vworlds-box2d3-wasm-*.tgz
+
+      - name: Propose the new vecs pin
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          new="$(git -C vecs rev-parse HEAD)"
+          old="$(tr -d '[:space:]' < ci/vecs-ref)"
+          if [ "$new" = "$old" ]; then
+            echo "vecs dev is still at the pinned commit $old; nothing to propose."
+            exit 0
+          fi
+          branch="automation/vecs-ref"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          echo "$new" > ci/vecs-ref
+          git add ci/vecs-ref
+          git commit -m "ci: pin vecs at ${new:0:12}" -m "The nightly run passed the vecs suites against vworlds/vecs dev at $new (was $old)."
+          git push --force origin "$branch"
+          body="The nightly run built dev and passed the vecs suites (physics, phaser-server, phaser) against vworlds/vecs dev at $new. This moves the pin in ci/vecs-ref from $old."
+          existing="$(gh pr list --head "$branch" --base dev --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body "$body"
+            echo "Updated pull request #$existing"
+          else
+            gh pr create --base dev --head "$branch" --title "ci: pin vecs at ${new:0:12}" --body "$body"
+          fi
