@@ -1,0 +1,19 @@
+{
+  "name": "box2d3-wasm-demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "node tests/check.mjs"
+  },
+  "dependencies": {
+    "phaser": "4.2.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.13.0",
+    "vite": "^7.0.0"
+  }
+}

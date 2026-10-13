@@ -230,6 +230,23 @@ declare (so a Box2D update that removes or renames one is noticed), or when an e
 bound. Lines starting with `+` in the exceptions file list package helpers that have no C twin
 (`b2Body_GetPointer`, ...). Run it after changing `glue.cpp` or moving the Box2D submodule.
 
+## Demo
+
+`demo/` is a small Phaser 4 site that runs this package on the main thread (flat embind API to create
+bodies, the `b2x_` fast path to step and read poses): a pile, a joints scene, sensors and hit events, and
+3500 always-moving bodies. It loads whichever flavour `entry.mjs` picks and shows it in the stats readout.
+It imports the package from this repository's `dist/`, so build the package first.
+
+```sh
+npm run build          # the package, into dist/
+npm --prefix demo ci     # once
+npm run demo:dev       # http://localhost:5173
+npm run demo:build     # static site in demo/dist-site/
+```
+
+The demo is not part of the published package (it has its own `package.json`). CI builds it and deploys
+`demo/dist-site/` to GitHub Pages from `master`. See [demo/README.md](demo/README.md).
+
 ## Repository layout
 
 | path | contents |
@@ -239,6 +256,7 @@ bound. Lines starting with `+` in the exceptions file list package helpers that 
 | `patches/box2d/` | the patch applied to the Box2D submodule |
 | `box2d/` | Box2D (git submodule) |
 | `tests/` | differential and integration tests, `stock-differential/` |
+| `demo/` | the Phaser 4 demo site (own `package.json`, not published) |
 | `docs/` | [fastpath.md](docs/fastpath.md), [vecs-migration.md](docs/vecs-migration.md), [box2d-update.md](docs/box2d-update.md) |
 | `dist/`, `build/` | build output (not committed) |
 

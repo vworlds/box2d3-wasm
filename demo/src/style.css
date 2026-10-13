@@ -1,0 +1,14 @@
+:root { color-scheme: dark; --bg: #11151c; --panel: rgba(20, 26, 36, 0.82); --fg: #dbe4f0; --dim: #8b99ab; --accent: #5aa9e6; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+#game { position: fixed; inset: 0; }
+#game canvas { display: block; touch-action: none; }
+#bar { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 16px; align-items: center; padding: 8px 16px; background: var(--panel); flex-wrap: wrap; }
+#picker { display: flex; gap: 6px; flex-wrap: wrap; }
+#picker button { background: #1e2735; color: var(--fg); border: 1px solid #2c3a4f; border-radius: 6px; padding: 5px 12px; font: inherit; cursor: pointer; }
+#picker button[aria-current="true"] { background: var(--accent); color: #07121f; border-color: var(--accent); }
+#hud { position: fixed; left: 16px; bottom: 16px; max-width: calc(100% - 32px); padding: 8px 12px; background: var(--panel); border-radius: 8px; pointer-events: none; }
+#desc { color: var(--dim); margin-bottom: 4px; max-width: 60ch; }
+#stats { margin: 0; font: 13px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
+#fatal { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); padding: 24px; white-space: pre-wrap; color: #ff8080; }
+#fatal[hidden] { display: none; }
