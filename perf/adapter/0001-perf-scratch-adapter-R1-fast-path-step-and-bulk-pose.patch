@@ -1,7 +1,7 @@
 From 02eb5bfac49dede6f10b7c813c55ae6d31619092 Mon Sep 17 00:00:00 2001
 From: scratch <jm@peletier.com>
 Date: Mon, 12 Oct 2026 23:35:56 +0000
-Subject: [PATCH 1/4] perf: scratch adapter R1 - fast-path step and bulk
+Subject: [PATCH 1/7] perf: scratch adapter R1 - fast-path step and bulk
  pose-out (local only, never push)
 
 ---

@@ -1,7 +1,7 @@
 From fc11e83c681e5a830de59991bcfba8c0a1bd8d22 Mon Sep 17 00:00:00 2001
 From: scratch <jm@peletier.com>
 Date: Tue, 13 Oct 2026 00:09:02 +0000
-Subject: [PATCH 3/4] perf: scratch adapter R3 - profile timers off, no
+Subject: [PATCH 3/7] perf: scratch adapter R3 - profile timers off, no
  iteration of empty queues (local only)
 
 ---

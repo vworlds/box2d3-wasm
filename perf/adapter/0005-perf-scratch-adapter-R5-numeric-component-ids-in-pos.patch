@@ -1,0 +1,106 @@
+From f951e71ca5f2fc80d9314e62b01c07daaf0e521e Mon Sep 17 00:00:00 2001
+From: scratch <jm@peletier.com>
+Date: Tue, 13 Oct 2026 00:27:26 +0000
+Subject: [PATCH 5/7] perf: scratch adapter R5 - numeric component ids in
+ pose-out entity.get (local only)
+
+---
+ lib/vecs-physics/src/body/pose_out.ts | 38 ++++++++++++++++++++++-----
+ 1 file changed, 31 insertions(+), 7 deletions(-)
+
+diff --git a/lib/vecs-physics/src/body/pose_out.ts b/lib/vecs-physics/src/body/pose_out.ts
+index 66d99dd..ac20081 100644
+--- a/lib/vecs-physics/src/body/pose_out.ts
++++ b/lib/vecs-physics/src/body/pose_out.ts
+@@ -30,6 +30,15 @@ export class BodyPoseOutModule extends Module {
+       w: move.w >> 2,
+     };
+     const flags = layout.constants.exportVelocity;
++    // Numeric component ids: entity.get(eid) is the same lookup as entity.get(Class) without
++    // resolving the class to its component entity on every call.
++    const ids: ComponentIds = {
++      body: world.entity(Body).eid,
++      position: world.entity(Position).eid,
++      rotation: world.entity(Rotation).eid,
++      linearVelocity: world.entity(LinearVelocity).eid,
++      angularVelocity: world.entity(AngularVelocity).eid,
++    };
+     world
+       .system("PhysicsPoseSyncOut")
+       .phase(engine.phases.postStep)
+@@ -53,18 +62,27 @@ export class BodyPoseOutModule extends Module {
+           if (entity === undefined || entity.destroyed) {
+             continue;
+           }
+-          const body = entity.get(Body);
++          const body = entity.get(ids.body) as Body | undefined;
+           if (body?.type !== BodyType.Dynamic) {
+             continue;
+           }
+ 
+-          writePose(entity, f32, base, offsets);
++          writePose(entity, f32, base, offsets, ids);
+         }
+       })
+       .add(PhysicsSystemTag);
+   }
+ }
+ 
++/** Component entity ids of the components pose-out reads, resolved once at init. */
++interface ComponentIds {
++  body: number;
++  position: number;
++  rotation: number;
++  linearVelocity: number;
++  angularVelocity: number;
++}
++
+ /** Word offsets of the b2xMove fields pose-out reads, from the fast path's generated layout. */
+ interface MoveOffsets {
+   bodyIndex: number;
+@@ -103,15 +121,21 @@ interface MoveOffsets {
+  * (`b2Body_GetLinearVelocity` / `b2Body_GetAngularVelocity`), read in wasm right after the step.
+  * They are the f32 values the embind getters returned, read without a handle or an allocation.
+  */
+-function writePose(entity: Entity, f32: Float32Array, base: number, offsets: MoveOffsets): void {
++function writePose(
++  entity: Entity,
++  f32: Float32Array,
++  base: number,
++  offsets: MoveOffsets,
++  ids: ComponentIds
++): void {
+   const x = f32[base + offsets.x]!;
+   const y = f32[base + offsets.y]!;
+-  const position = entity.get(Position);
++  const position = entity.get(ids.position) as Position | undefined;
+   if (position === undefined || position.x !== x || position.y !== y) {
+     entity.set(Position, { x, y });
+   }
+ 
+-  const rotation = entity.get(Rotation);
++  const rotation = entity.get(ids.rotation) as Rotation | undefined;
+   if (rotation !== undefined) {
+     const angle = f32[base + offsets.angle]!;
+     if (rotation.angle !== angle) {
+@@ -119,7 +143,7 @@ function writePose(entity: Entity, f32: Float32Array, base: number, offsets: Mov
+     }
+   }
+ 
+-  const linearVelocity = entity.get(LinearVelocity);
++  const linearVelocity = entity.get(ids.linearVelocity) as LinearVelocity | undefined;
+   if (linearVelocity !== undefined) {
+     const vx = f32[base + offsets.vx]!;
+     const vy = f32[base + offsets.vy]!;
+@@ -128,7 +152,7 @@ function writePose(entity: Entity, f32: Float32Array, base: number, offsets: Mov
+     }
+   }
+ 
+-  const angularVelocity = entity.get(AngularVelocity);
++  const angularVelocity = entity.get(ids.angularVelocity) as AngularVelocity | undefined;
+   if (angularVelocity !== undefined) {
+     const value = f32[base + offsets.w]!;
+     if (angularVelocity.value !== value) {
+-- 
+2.43.0
+

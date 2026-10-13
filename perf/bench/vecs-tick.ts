@@ -68,6 +68,9 @@ const defaults: Record<string, [number, number]> = {
   drive500: [300, 1000],
 };
 const traceEveryStep = process.env.BENCH_TRACE === "1";
+// BENCH_WORKERS=<n>: passed as PhysicsModule's workerCount (scratch adapter option; ignored by
+// adapters without it).
+const workers = Number(process.env.BENCH_WORKERS || 0);
 if (!(sceneName in defaults)) {
   throw new Error(`unknown scene ${sceneName}`);
 }
@@ -270,7 +273,12 @@ function manyWorldsScene(worldCount: number, perWorld: number): Scene {
  */
 function contactScene(): Scene {
   const world = new World();
-  world.module(PhysicsModule, { gravity: { x: 0, y: -10 }, fixedTimeStep: dt, enableSleep: false });
+  world.module(PhysicsModule, {
+    gravity: { x: 0, y: -10 },
+    fixedTimeStep: dt,
+    enableSleep: false,
+    ...(workers > 0 ? { workerCount: workers } : {}),
+  } as Parameters<typeof world.module<typeof PhysicsModule>>[1]);
   const wall = (x: number, y: number, hx: number, hy: number) => {
     const body = world.entity().set(Body, { type: BodyType.Static }).set(Position, { x, y });
     world.entity().add(ChildOf, body).set(Box, { hx, hy });

@@ -1,0 +1,64 @@
+profile /home/user/prof/final/drift10000.cpuprofile
+tick-loop samples: 10526 ms
+
+== by category (self time)
+ 54.7%  vecs
+ 25.7%  vecs-physics
+ 17.2%  box2d
+  1.6%  gc
+  0.7%  engine
+  0.1%  bench
+  0.0%  embind-wasm
+
+== by system x category
+ 46.4%  other
+     46.2%  vecs
+      0.1%  bench
+      0.1%  engine
+      0.0%  vecs-physics
+ 35.7%  PhysicsPoseSyncOut
+     25.6%  vecs-physics
+      8.6%  vecs
+      1.5%  box2d
+      0.0%  engine
+      0.0%  embind-wasm
+ 15.7%  PhysicsStep
+     15.7%  box2d
+      0.0%  embind-wasm
+      0.0%  vecs-physics
+  1.6%  (garbage collector)
+      1.6%  gc
+  0.6%  (program)
+      0.6%  engine
+  0.1%  PhysicsEvents
+      0.1%  vecs-physics
+      0.0%  box2d
+      0.0%  engine
+      0.0%  embind-wasm
+
+== top 25 functions (self time)
+ 32.8%  vecs  _executeCommand  lib/vecs/dist/world/world.deferred.js:59
+ 17.1%  vecs-physics  (anon)  lib/vecs-physics/dist/body/pose_out.js:35
+  8.5%  vecs-physics  writePose  lib/vecs-physics/dist/body/pose_out.js:88
+  5.5%  vecs  get  lib/vecs/dist/entity/entity.components.js:163
+  5.4%  vecs  _routeModified  lib/vecs/dist/entity/entity.queries.js:48
+  4.0%  box2d  b2ExecuteBlock  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  3.8%  vecs  _set  lib/vecs/dist/entity/entity.components.js:92
+  3.0%  box2d  b2FindPairsTask  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  2.4%  box2d  b2FinalizeBodiesTask  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  2.2%  box2d  b2World_Step  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  1.6%  vecs  _processCommandQueue  lib/vecs/dist/world/world.deferred.js:92
+  1.6%  gc  (garbage collector)  :0
+  1.5%  box2d  b2x_World_ExportMoves  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  1.4%  box2d  b2ComputeShapeAABB  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  1.1%  vecs  _enqueue  lib/vecs/dist/world/world.deferred.js:28
+  1.1%  box2d  b2PartitionMid  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  0.9%  box2d  b2DynamicTree_Rebuild  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  0.9%  vecs  getEntity  lib/vecs/dist/world/world.entities.js:47
+  0.8%  vecs  has  lib/vecs/dist/terms/term.js:40
+  0.8%  vecs  entity  lib/vecs/dist/world/world.entities.js:70
+  0.7%  vecs  _notifyComponentChanged  lib/vecs/dist/world/world.queries.js:97
+  0.6%  engine  (program)  :0
+  0.4%  box2d  b2AddKey  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  0.3%  vecs  _run  lib/vecs/dist/system.js:168
+  0.2%  vecs  _notifyComponentSet  lib/vecs/dist/entity/entity.components.js:433

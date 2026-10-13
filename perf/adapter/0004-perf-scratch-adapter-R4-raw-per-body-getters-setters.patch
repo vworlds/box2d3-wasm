@@ -1,7 +1,7 @@
 From 468e831fc9759557f14e8388eac8d43a202f388e Mon Sep 17 00:00:00 2001
 From: scratch <jm@peletier.com>
 Date: Tue, 13 Oct 2026 00:18:38 +0000
-Subject: [PATCH 4/4] perf: scratch adapter R4 - raw per-body getters/setters
+Subject: [PATCH 4/7] perf: scratch adapter R4 - raw per-body getters/setters
  for pose-in, forces, impulses, kinematic targets, bodyMotion (local only)
 
 ---

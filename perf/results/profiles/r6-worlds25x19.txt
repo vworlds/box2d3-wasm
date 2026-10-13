@@ -1,0 +1,54 @@
+profile /home/user/prof/r6/worlds25x19.cpuprofile
+tick-loop samples: 1329 ms
+
+== by category (self time)
+ 59.0%  vecs
+ 19.2%  vecs-physics
+ 15.0%  box2d
+  3.0%  bench
+  2.6%  engine
+  1.0%  gc
+  0.1%  embind-wasm
+
+== by system x category
+ 55.3%  other
+     46.5%  vecs
+      4.0%  vecs-physics
+      3.0%  bench
+      1.8%  engine
+      0.0%  box2d
+ 28.6%  PhysicsPoseSyncOut
+     14.1%  vecs-physics
+     12.5%  vecs
+      1.6%  box2d
+      0.4%  engine
+ 13.4%  PhysicsStep
+     13.3%  box2d
+      0.1%  vecs-physics
+  1.4%  PhysicsEvents
+      1.0%  vecs-physics
+      0.1%  engine
+      0.1%  embind-wasm
+      0.1%  box2d
+  1.0%  (garbage collector)
+      1.0%  gc
+  0.3%  (program)
+      0.3%  engine
+
+== top 16 functions (self time)
+ 11.9%  vecs  (anon)  lib/vecs/dist/system.js:190
+ 10.2%  vecs-physics  writePose  lib/vecs-physics/dist/body/pose_out.js:91
+ 10.0%  vecs  _run  lib/vecs/dist/system.js:168
+  8.7%  vecs  get  lib/vecs/dist/entity/entity.components.js:163
+  5.2%  vecs  progress  lib/vecs/dist/world/world.pipeline.js:37
+  5.1%  vecs  _executeCommand  lib/vecs/dist/world/world.deferred.js:59
+  3.9%  vecs-physics  (anon)  lib/vecs-physics/dist/body/pose_out.js:35
+  3.7%  vecs  _set  lib/vecs/dist/entity/entity.components.js:92
+  3.6%  vecs  _routeModified  lib/vecs/dist/entity/entity.queries.js:48
+  3.6%  box2d  b2ExecuteBlock  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  2.6%  box2d  b2FinalizeBodiesTask  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  2.4%  box2d  b2World_Step  wasm://wasm/Box2D.deluxe.wasm-002391de:1
+  1.8%  bench  system._run  bench/vecs-tick.ts:374
+  1.8%  vecs  beginFrame  lib/vecs/dist/world/world.pipeline.js:18
+  1.8%  vecs-physics  (anon)  lib/vecs-physics/dist/forces/zero.js:13
+  1.7%  vecs  _enqueue  lib/vecs/dist/world/world.deferred.js:28

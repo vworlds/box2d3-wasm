@@ -1,0 +1,70 @@
+From 94209f1a28c49f8a22693ca4fb40e35353d6a8b3 Mon Sep 17 00:00:00 2001
+From: scratch <jm@peletier.com>
+Date: Tue, 13 Oct 2026 01:12:31 +0000
+Subject: [PATCH 7/7] perf: scratch adapter R9 - one span fetch block and one
+ memory sync per events step (local only)
+
+---
+ lib/vecs-physics/src/events/publish.ts | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/lib/vecs-physics/src/events/publish.ts b/lib/vecs-physics/src/events/publish.ts
+index 28e9506..5c66daa 100644
+--- a/lib/vecs-physics/src/events/publish.ts
++++ b/lib/vecs-physics/src/events/publish.ts
+@@ -40,7 +40,12 @@ export class EventPublishModule extends Module {
+     const engine = getPhysicsEngine(world);
+     const offsets = eventOffsets(engine);
+     // Scratch for the span headers, and the per-step touched sets, reused every step.
+-    const spans = engine.fast.alloc(Math.max(engine.fast.layout.contactSpans.size, engine.fast.layout.sensorSpans.size));
++    // Contact spans, then sensor spans, in one scratch block: both headers are fetched up front
++    // and the memory views are synced once per step.
++    const spans = engine.fast.alloc(
++      engine.fast.layout.contactSpans.size + engine.fast.layout.sensorSpans.size
++    );
++    const sensorSpans = spans + engine.fast.layout.contactSpans.size;
+     const touchedContact = new Set<EID>();
+     const touchedSensor = new Set<EID>();
+     const touchedHit = new Set<EID>();
+@@ -52,8 +57,11 @@ export class EventPublishModule extends Module {
+         clearSet(touchedSensor);
+         clearSet(touchedHit);
+ 
++        engine.box2d._b2x_World_GetContactSpans(engine.world, spans);
++        engine.box2d._b2x_World_GetSensorSpans(engine.world, sensorSpans);
++        engine.fast.sync();
+         publishContactAndHitEvents(world, engine, spans, offsets, touchedContact, touchedHit);
+-        publishSensorEvents(world, engine, spans, offsets, touchedSensor);
++        publishSensorEvents(world, engine, sensorSpans, offsets, touchedSensor);
+ 
+         markModified(world, touchedContact, ContactEvents);
+         markModified(world, touchedSensor, SensorEvents);
+@@ -111,7 +119,7 @@ function eventOffsets(engine: PhysicsEngine): EventOffsets {
+   };
+ }
+ 
+-// Contact begin/end and hit events all come from one span poll per step (ARCHITECTURE.md ->
++// Contact begin/end and hit events all come from one span poll per step (fetched by the system) (ARCHITECTURE.md ->
+ // PhysicsEvents: "poll once per step"). The spans point into Box2D's own event arrays, valid
+ // until the next step; records are read in place, in Box2D's order: begins, ends, hits.
+ function publishContactAndHitEvents(
+@@ -123,8 +131,6 @@ function publishContactAndHitEvents(
+   touchedHit: Set<EID>
+ ): void {
+   const fast = engine.fast;
+-  engine.box2d._b2x_World_GetContactSpans(engine.world, spans);
+-  fast.sync();
+   const i32 = fast.i32;
+   const u32 = fast.u32;
+   const f32 = fast.f32;
+@@ -158,7 +164,6 @@ function publishSensorEvents(
+   touched: Set<EID>
+ ): void {
+   const fast = engine.fast;
+-  engine.box2d._b2x_World_GetSensorSpans(engine.world, spans);
+   const i32 = fast.i32;
+   const u32 = fast.u32;
+   const header = spans >> 2;
+-- 
+2.43.0
+

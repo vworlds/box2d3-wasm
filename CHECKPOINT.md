@@ -9,7 +9,7 @@ box2d3-wasm **5.2.0** (`ee2a63b`). Reference consumer: `vworlds/vecs` (read-only
 | --- | --- |
 | 1. Setup and baseline | **done** (BREAKPOINT A) |
 | 2. Plan and API design | **done** (BREAKPOINT B) |
-| 3. Iterate | **in progress**: R1 done, R2–R4 implemented (see "Phase 3 rounds") |
+| 3. Iterate | **done** (BREAKPOINT C): 9 rounds, stopped after R8 and R9 each gained < 5% |
 | 4. Final analysis | not started |
 
 Hard rule for every later phase: results stay bit-identical to stock 5.2.0. Proof per build: the
@@ -658,16 +658,209 @@ worlds25x19: step **899 → 225 ns/body**, whole tick **−33%**. That matches t
 timers cost ~5 ns/body. rest2000 allocates 5.0 B/body/step, all of it fixed per-step bytes
 (vecs core and the harness).
 
-## Next steps (Phase 3, after go-ahead)
+### Round 4: generated per-body API; pose-in, forces, impulses, kinematic targets, bodyMotion
 
-1. R1: add `box2d3-wasm/csrc/fastpath.cpp` (ids, layout JSON, `b2x_World_Step`,
-   `b2x_World_GetMoveCount`, `b2x_World_ExportMoves`, `b2x_World_GetMoveEventSpan`, user data),
-   compile it in `shell/1_build_wasm.sh`, export `wasmMemory`/`HEAPF32`/`HEAP32`, add the
-   `fastpath` helper and its `.d.ts` plus the `package.json` export, write
-   `perf/tests/fastpath-differential.mjs`, then migrate `core/step.ts` and `body/pose_out.ts` in
-   `../vecs-scratch` (local branch `scratch/fork-adapter`).
-2. Run the proof kit (§2.5) and ≥5 alternating rounds; append "Round 1" to this file; continue
-   with R2…R6 as planned, re-planning if a round surprises.
+Fork:
+- `tools/gen_fastpath.py` generates `csrc/fastpath_body.gen.cpp` + `src/fastpath_body.gen.d.ts`:
+  60 of the 65 `b2Body_*` functions. The 5 skipped are names, raw `void*` user data (covered by
+  the integer user-data calls) and `GetContactData`. Id arrays (`GetShapes`, `GetJoints`) are
+  written straight into the caller's buffer: a `b2ShapeId`/`b2JointId` *is* the
+  `(index1, rev)` word pair, enforced by `static_assert`. `--check` mode detects stale output.
+- Composites in `fastpath.cpp`: `b2x_Body_SetPosition`, `b2x_Body_SetAngle`,
+  `b2x_Body_GetPose`, `b2x_Body_GetMotion`. Layouts `pose` and `motion` were added to the JSON.
+- The differential test gained section 5 (every generated getter and both composites against
+  embind, every body) and section 6 (twin worlds, one driven by embind setters and one by
+  `b2x_` setters with the same pseudo-random doubles, full state compared bitwise every step
+  for 150 steps). **5,473,096 values equal on deluxe and compat.**
+
+Scratch adapter (`perf/adapter/0004-*.patch`):
+- `pose_in.ts`: `b2x_Body_SetPosition` / `SetAngle` / `SetLinearVelocity` /
+  `SetAngularVelocity`.
+- `forces/gather.ts`, `forces/impulses.ts`: raw apply calls.
+- `kinematic/targets.ts`: raw type, position, pose, velocity and awake calls; the JS target math
+  is unchanged.
+- `queries.ts`: `bodyMotion` → `b2x_Body_GetMotion` (vecs-phaser-server's dead reckoning),
+  `isAwake` → raw.
+- A 64-byte wasm scratch (`scr_fastOut`) holds out-parameters.
+
+Proof: `perf/prove.sh fork-r4` passes (incl. `motion_accuracy.test.ts`, which now reads
+`b2x_Body_GetMotion`). Timing R3 → R4:
+
+| scene | copy-out r3 → r4 | × | step r3 → r4 | events | whole tick r3 → r4 | × | tick spread r4 | alloc B/body/step (r4) | checksums |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| drift500 | 606 → 618 | 1.0× | 170 → 169 | 10 → 10 | 815 → 837 | **1.0×** | 26% | 406.2 | 11c76fa7 (same) |
+| drift2000 | 773 → 818 | 0.9× | 180 → 183 | 4 → 4 | 972 → 1018 | **1.0×** | 16% | 393.6 | a66a94ee (same) |
+| drift10000 | 1466 → 1439 | 1.0× | 258 → 254 | 3 → 3 | 1740 → 1702 | **1.0×** | 22% | 385.3 | 70623967 (same) |
+| contact | 1203 → 1222 | 1.0× | 1804 → 1828 | 134 → 137 | 3152 → 3253 | **1.0×** | 21% | 839.9 | 5db7f953 (same) |
+| worlds25x19 | 776 → 765 | 1.0× | 246 → 240 | 45 → 39 | 1638 → 1622 | **1.0×** | 11% | 690.7 | a8a0671e (same) |
+| rest2000 | 282 → 257 | 1.1× | 88 → 87 | 4 → 4 | 391 → 355 | **1.1×** | 21% | 5.0 | 17fc310b (same) |
+| drive500 | 1005 → 1021 | 1.0× | 519 → 484 | 14 → 13 | 3132 → 1820 | **1.7×** | 33% | 874.3 | fd7cc876 (same) |
+
+drive500: force gather **1,508 → 262 ns/body**; whole tick −42%; allocation 1,500 → 874
+B/body/step (the `vec.Set` handles are gone). The other scenes have no per-step per-body calls
+in these paths, so no change is expected and none is seen beyond noise.
+
+### Round 5: numeric component ids in pose-out (adapter only)
+
+vecs's `entity.get(Class)` resolves the class to its component entity (`world.getEntity`) on every
+call, then does the component lookup. `entity.get(eid)` is the same lookup without the
+resolution. Pose-out now resolves `Body`, `Position`, `Rotation`, `LinearVelocity` and
+`AngularVelocity` once at init. No fork change.
+
+Proof: `perf/prove.sh fork-r4` passes. Timing R4 → R5:
+
+| scene | copy-out r4 → r5 | × | step r4 → r5 | events | whole tick r4 → r5 | × | tick spread r5 | checksums |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| drift500 | 561 → 565 | 1.0× | 166 → 176 | 9 → 10 | 771 → 788 | **1.0×** | 19% | 11c76fa7 (same) |
+| drift2000 | 758 → 616 | 1.2× | 179 → 172 | 4 → 4 | 952 → 802 | **1.2×** | 7% | a66a94ee (same) |
+| drift10000 | 1196 → 958 | 1.2× | 236 → 234 | 2 → 2 | 1440 → 1199 | **1.2×** | 32% | 70623967 (same) |
+| contact | 1129 → 1055 | 1.1× | 1779 → 1811 | 116 → 131 | 3017 → 3014 | **1.0×** | 8% | 5db7f953 (same) |
+| worlds25x19 | 747 → 652 | 1.1× | 225 → 234 | 38 → 38 | 1563 → 1469 | **1.1×** | 13% | a8a0671e (same) |
+| rest2000 | 250 → 202 | 1.2× | 84 → 88 | 3 → 3 | 348 → 300 | **1.2×** | 25% | 17fc310b (same) |
+| drive500 | 1000 → 844 | 1.2× | 495 → 479 | 12 → 12 | 1826 → 1624 | **1.1×** | 16% | fd7cc876 (same) |
+
+Whole tick −16% (drift2000), −17% (drift10000), −14% (rest2000), −11% (drive500),
+−6% (worlds25x19): a gaining round.
+
+### Round 6: build variants, LTO for the Box2D library adopted
+
+Three variants of the R5 build (`fork-r4`), deluxe:
+- `-sSTACK_OVERFLOW_CHECK=0` (Release sets 2);
+- LTO for the Box2D static library (`-flto` in its CFLAGS; the link was already `-flto`);
+- both.
+
+Every variant passes the quick proof kit (differential test, 14/14 checksums). The per-step
+traces (`BENCH_TRACE=1`: every body's pose and velocities folded in after every step) are
+identical to fork-r4 on drift500, contact, worlds25x19 and drive500.
+
+Box2D-only step benchmark (`perf/spikes/step-bench.mjs`, 8 alternating rounds, ns/body/step):
+
+| scene | fork-r4 | no stack check | LTO | LTO + no stack check |
+|---|---:|---:|---:|---:|
+| contact pile (1,000) | 1039 | 1023 (1.02×) | 1053 (0.99×) | 1002 (1.04×) |
+| 25 worlds × 19 | 190 | 159 (1.19×) | **147 (1.29×)** | 146 (1.30×) |
+| 500 forced bodies | 390 | 377 (1.04×) | **354 (1.10×)** | 353 (1.10×) |
+
+LTO gives almost all of it, mostly per-call overhead. **Adopted: Release builds compile Box2D
+with `-flto`** (`0_build_makefile.sh`). Upstream's stack-overflow check is kept, since dropping
+it adds ~1%. A clean `REBUILD_LIB=1` rebuild reproduces a build byte for byte (checked), and
+`fork-r6` deluxe is byte-identical to the LTO variant. Wasm size: 449 → 485 KB.
+
+Whole tick R5 → R6 (`perf/results/r6-timing.jsonl`): steps 4–18% cheaper (contact 2,006 → 1,872,
+worlds25x19 280 → 229). The whole tick moved inside this session's noise in both directions
+(spreads up to 50%; contact's copy-out, which LTO cannot affect, moved 18%). **Counted as < 5%.**
+
+### Round 7: pose-out reads entity objects by body index (adapter)
+
+`engine.bodyEntities[index1]` holds the `Entity`, set and cleared next to `entityByBodyIndex`.
+Pose-out skips the per-body `world.getEntity(eid)`; the `destroyed` check stays. Proof passes on
+fork-r6. R6 → R7 whole tick: drift10000 −9.5%, rest2000 −6.7%, worlds25x19 −6.4%, others
+±2%. Copy-out improved in 6/7 scenes (contact −17%, drift10000 −10%). Spreads 26–43%.
+**Counted as a gain (≥ 5% in three scenes).**
+
+### Round 8: threaded step for large worlds (opt-in), dropped
+
+Scratch adapter option `workerCount` creates the world through the deluxe glue's
+`b2CreateThreadedWorld` (enkiTS). The checksum is identical at 0, 2 and 4 workers (contact,
+events included), and the Box2D-only probe (`perf/spikes/threads.mjs`) gives an identical
+per-step state hash at 0/1/2/4 workers. But inside the vecs tick on this 4-vCPU host the step
+got slower (1,827 → 1,910–2,303 ns/body with 4 workers; 2 workers worse). The Box2D-only probe's
+1.4× at 4 workers does not survive the main thread doing JS work between steps. **Dropped; code
+reverted. Counted as < 5%.** (Result-neutral, so it remains a possible vecs configuration
+option for many-core servers with very large worlds; measure there.)
+
+### Round 9: one span fetch and one memory sync per events step (adapter)
+
+`PhysicsEvents` fetches both span headers into one scratch block and syncs the memory views
+once. R7 → R9 whole tick: every scene within ±4%. **Counted as < 5%.**
+
+**Stop: R8 and R9 are two consecutive rounds under 5% on every scene.** The final comparison
+against stock and the composition of the remaining cost follow below.
+
+### Phase 3 result: stock vs final (same session, 5 alternating rounds)
+
+Final = fork build `fork-r6` (fast path, timer switch, LTO) + scratch adapter after R9
+(`perf/adapter/0001…0007-*.patch` on vecs `2d58dd7`). Stock = npm `box2d3-wasm@5.2.0` +
+unmodified vecs `2d58dd7`. ns per body per step; raw data `perf/results/phase3-final-*`.
+
+| scene | copy-out stock → final | × | step stock → final | events | whole tick stock → final | × | tick spread final | alloc B/body/step stock → final | checksums |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| drift500 | 6809 → 480 | **14.2×** | 248 → 158 | 51 → 9 | 7171 → 678 | **10.6×** | 31% | 3782 → 406.5 | 11c76fa7 (same) |
+| drift2000 | 7815 → 624 | **12.5×** | 248 → 166 | 27 → 4 | 8131 → 807 | **10.1×** | 17% | 3751 → 393.5 | a66a94ee (same) |
+| drift10000 | 7745 → 1289 | **6.0×** | 259 → 244 | 9 → 3 | 8020 → 1541 | **5.2×** | 5% | 3764 → 385.3 | 70623967 (same) |
+| contact | 8776 → 1112 | 7.9× | 2092 → 1743 | 432 → 147 | 11366 → 3067 | **3.7×** | 18% | 4274 → 839.9 | 5db7f953 (same) |
+| worlds25x19 | 7258 → 676 | 10.7× | 1124 → 227 | 278 → 40 | 9621 → 1564 | **6.1×** | 17% | 4432 → 690.7 | a8a0671e (same) |
+| rest2000 | 6412 → 200 | 32.1× | 138 → 89 | 19 → 4 | 6601 → 295 | **22.4×** | 25% | 3306 → 5.4 | 17fc310b (same) |
+| drive500 | 7838 → 877 | 8.9× | 617 → 448 | 66 → 12 | 10296 → 1639 | **6.3×** | 16% | 4876 → 787.9 | fd7cc876 (same) |
+
+Targets (§2.4):
+- copy-out ≥ 5× on the drift scenes: **met** (14.2×, 12.5×, 6.0×). Stretch 10×: met at 500
+  and 2,000, not at 10,000.
+- whole tick ≥ 3× on the drift scenes: **met** (10.6×, 10.1×, 5.2×). Stretch 6×: met at 500
+  and 2,000.
+- zero allocations per body on the read path: **met**. rest2000 allocates 5.4 B/body/step,
+  which is 10.8 KB/step of *fixed* per-step bytes: vecs's system runner and pipeline iteration
+  (~7.7 KB) and the harness's instrumentation (~1 KB), per the heap sample in R2. In stock this
+  scene allocated 3,306 B/body/step, all from the read path. On the drift scenes the remaining
+  ~390 B/body/step is vecs's `entity.set` path: the `{x, y}` / `{angle}` literal, the deferred
+  command record and update routing, for Position and Rotation every step.
+- contact 3.7×, worlds25x19 6.1×, drive500 6.3×, rest2000 22.4×: reported separately.
+
+### What the remaining cost is made of, and why it stays
+
+Final profile (`perf/results/profiles/final-*.txt`), self time share of the whole tick:
+
+| category | drift2000 | drift10000 | contact | worlds25x19 | rest2000 | drive500 |
+|---|---:|---:|---:|---:|---:|---:|
+| vecs (ECS core) | 44.8% | 54.7% | 24.7% | 54.5% | 15.6% | 48.6% |
+| vecs-physics (adapter, incl. inlined vecs `get`/`set`) | 28.8% | 25.7% | 16.9% | 25.1% | 44.8% | 17.5% |
+| Box2D (step + 1–2% export) | 21.0% | 17.2% | 56.2% | 13.5% | 37.6% | 29.3% |
+| GC | 4.6% | 1.6% | 1.4% | 1.3% | 0.3% | 2.9% |
+| embind / wasm allocator | 0.1% | 0.0% | 0.3% | 0.2% | 0.1% | 0.3% |
+| V8 + harness | 0.6% | 0.8% | 0.5% | 5.6% | 1.6% | 1.3% |
+
+1. **Box2D's step (13–56%).** This is the simulation itself (`b2ExecuteBlock` solver stages,
+   `b2FindPairsTask` / `b2CollideTask` broadphase and narrowphase, `b2FinalizeBodiesTask`).
+   Making it cheaper means changing its algorithms, solver settings, sub-steps or broadphase,
+   which changes results. Result-neutral build options were all tried:
+   - LTO: adopted.
+   - `STACK_OVERFLOW_CHECK=0`: ~1% on top of LTO; not adopted, to keep upstream's safety check.
+   - threads: identical results, slower in the vecs tick on this host.
+   - SIMD: already in the deluxe build.
+   The profile timers, the only non-simulation work inside the step, are switched off.
+2. **vecs's write path (the largest share on every moving scene).** Each changed pose component
+   is `entity.set` → a deferred command → `_executeCommand` → `_set` → `_routeModified` /
+   `_notifyComponentSet` to every watching system, plus GC of the per-set literal and command
+   record. vecs semantics require one modification per changed component (set hooks, update
+   routing, replication). Removing it changes vecs-observable behavior, not physics results, so
+   it is outside the fork. It could get cheaper only through a vecs API change (e.g. an in-place
+   bulk pose write that still routes one update per entity).
+3. **vecs's read path.** `entity.get` per component to compare with the committed state. The
+   compare-before-write must stay exact (it decides whether a write and its replication happen).
+   R5 already removed the class-to-id resolution; what is left is vecs's component map lookup.
+4. **vecs per-system overhead in many small worlds (worlds25x19: `system.js` wrapper + `_run` +
+   `progress` ≈ 28%).** Every registered system runs per world per tick, even with nothing to
+   do. This is vecs core (the "empty system fast path" noted in #273).
+5. **The adapter loop itself.** One pass over the export buffer: body index → cached entity,
+   destroyed and `Body.type` checks, four exact compares. The `Body.type` read is a component
+   read that keeps today's semantics. The export's own type flag would save it, but it can differ
+   from the component inside a frame in which `Body.type` was just changed.
+
+Fork-side cost left: `b2x_World_ExportMoves` ≈ 1.8% (≈ 15 ns/body: per-body id validation,
+type and velocity lookups through Box2D's public API). Reading Box2D's internal body arrays
+directly would halve it, at the price of depending on private headers. Not done.
+
+## Next steps (Phase 4, after go-ahead)
+
+1. Audit from a clean checkout of the fork: rebuild (both flavours, Release), re-run the
+   differential test, all checksums (scratch adapter rebuilt from `perf/adapter/*.patch` and
+   unmodified vecs), and the three vecs suites in both checkouts.
+2. Final table with noise (re-run stock vs final in one session if the audit build differs).
+3. API reference with TypeScript declarations (`docs/fastpath.md`), patch documentation (fork
+   vs upstream box2d3-wasm, Box2D patch), migration guide for vecs (each call site, today →
+   fast path, order, expected gain per step), left-on-the-table list.
+4. Publish `@vworlds/box2d3-wasm` (check npm credentials; fallback GitHub Packages or a release
+   tarball) and report the version to VecsMaster.
 
 ---
 
@@ -717,6 +910,38 @@ node perf/bench/analyze-profile.mjs prof/<file>.cpuprofile --top 40
 # per-op marshalling prices
 BOX2D_ENTRY=../builds/stock-src/entry.mjs node perf/bench/embind-ops.mjs
 ```
+
+
+### Phase 3 setup (scratch adapter, fork builds, proof kit)
+
+```bash
+# fork builds (from the fork root; emsdk + TS 5 on PATH as above)
+FLAVOURS="deluxe compat" REBUILD_LIB=1 perf/build-variant.sh ../builds/fork        # final: fast path + timer patch + LTO
+perf/build-variant.sh ../builds/fork-prof --profiling-funcs                       # profiling (lib from the line above)
+python3 box2d3-wasm/tools/gen_fastpath.py --check                                  # generated body API up to date
+
+# two vecs checkouts at 2d58dd7 (local only, never pushed)
+cd ../vecs && git worktree add --detach ../vecs-stock 2d58dd7
+git worktree add -b scratch/fork-adapter ../vecs-scratch 2d58dd7
+(cd ../vecs-scratch && git am ../box2d3-wasm/perf/adapter/*.patch)
+# each checkout gets its own node_modules: symlinks to ../vecs/node_modules/* except
+#   @vworlds/<pkg> -> <checkout>/lib/<pkg> (workspace links must point into the checkout itself)
+#   box2d3-wasm    -> /home/user/pkg/<checkout> (package.json of the fork + build/dist/es -> a build)
+#   dgram-client / dgram-server -> ../vecs/node_modules/@vworlds/dgram-* (real packages)
+perf/use-build.sh vecs-scratch ../builds/fork && perf/use-build.sh vecs-stock ../builds/fork
+(cd ../vecs-stock && npm run build) && (cd ../vecs-scratch && npm run build)
+
+# proof kit and timing
+perf/prove.sh ../builds/fork                      # differential (both flavours), 14 checksums, 6 suite runs
+node perf/bench/run.mjs --rounds 5 --variant stock=../vecs-stock@../builds/stock-npm/entry.mjs \
+  --variant final=../vecs-scratch@../builds/fork/entry.mjs --out perf/results/x.jsonl
+python3 perf/bench/summarize.py perf/results/x.jsonl stock final
+BENCH_HEAP_SAMPLE=/tmp/h.json BENCH_VECS_ROOT=../vecs-scratch BOX2D_ENTRY=../builds/fork/entry.mjs \
+  node --import ./perf/bench/register.mjs perf/bench/vecs-tick.ts rest2000 && python3 perf/bench/heap-sites.py /tmp/h.json 1000
+```
+
+Snapshots of each round's compiled adapter (`/home/user/snap/rN`) were plain copies of
+`vecs-scratch/lib` after each commit; recreate one by checking out that commit and building.
 
 Reference checksums (stock 5.2.0, default warmup/steps per scene): drift500 `11c76fa7`,
 drift2000 `a66a94ee`, drift10000 `70623967`, contact `5db7f953`, worlds25x19 `a8a0671e`,

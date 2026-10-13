@@ -12,6 +12,7 @@ export EXTRA_EMCC_OPTS="$*"
 cd "$ROOT/box2d3-wasm"
 for F in ${FLAVOURS:-deluxe}; do
   if [[ "${REBUILD_LIB:-0}" == 1 || ! -d "cmake-build-$F" ]]; then
+    rm -rf "cmake-build-$F" # CMake caches CFLAGS from the first configure
     FLAVOUR=$F ./shell/0_build_makefile.sh
     emmake make -j"$(nproc)" -C "cmake-build-$F"
   fi
