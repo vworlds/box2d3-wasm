@@ -103,8 +103,13 @@ signature changed.
 ```sh
 npm run build:docker
 npm run gen:check
+npm run check:bindings
 npm test
 ```
+
+`check:bindings` fails for every function the new headers add (bind it or add it to
+`scripts/bindings-exceptions.txt` with a reason) and for every exception or binding that names a
+function the new headers no longer declare (delete or rename it).
 
 and the path-independence check: build the same commit with the repository mounted at two
 different paths and compare `dist/` (scripts/build-in-docker.sh takes `MOUNT`):

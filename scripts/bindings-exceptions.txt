@@ -1,0 +1,56 @@
+# Box2D C functions that are deliberately not bound in the embind API (checked by
+# scripts/check_bindings.py, see "API coverage" in README.md). One name per line, a `# reason` is
+# mandatory. An entry for a function the headers no longer declare, or that is bound, fails the check.
+#
+# A line starting with `+` is not an exception: it lists a function this package binds under a
+# Box2D-style name that has no C twin (a package helper), so the stale-binding check accepts it.
+
+# --- debug draw, removed on purpose
+b2World_Draw          # debug draw removed
+b2DefaultDebugDraw    # debug draw removed
+
+# --- threading / allocator / assert hooks: callbacks into the host, not supported by this package
+b2SetAllocator        # takes C function pointers (allocator); not supported
+b2SetAssertFcn        # takes a C function pointer (assert handler); not supported
+b2InternalAssertFcn   # internal assert hook called by Box2D's own B2_ASSERT, not meant for callers
+
+# --- cannot be expressed through embind
+b2GetMillisecondsAndReset   # in/out uint64_t* argument; use b2GetTicks + b2GetMilliseconds instead
+b2ShapeDistance             # needs b2DistanceInput/b2DistanceOutput/b2SimplexCache/b2Simplex value classes and in/out arrays; not bound yet
+
+# --- needs a file system
+b2World_DumpMemoryStats   # writes box2d_memory.txt with fopen; this build has FILESYSTEM=0 and the call throws inside the runtime (verified)
+
+# --- declared but not implemented
+b2Chain_GetSurfaceMaterialCount   # declared in box2d.h, not defined in the pinned Box2D sources (box2d/src/shape.c): linking a binding fails
+
+# --- standalone dynamic AABB tree (collision.h): callback queries and raw tree pointers
+b2DynamicTree_Create                    # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_CreateProxy               # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_Destroy                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_DestroyProxy              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_EnlargeProxy              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetAABB                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetAreaRatio              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetByteCount              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetCategoryBits           # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetHeight                 # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetProxyCount             # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetRootBounds             # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetUserData               # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_MoveProxy                 # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_Query                     # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_QueryAll                  # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_RayCast                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_Rebuild                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_SetCategoryBits           # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_ShapeCast                 # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_Validate                  # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_ValidateNoEnlarged        # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+
+# --- package helpers (bound, no C twin)
++b2World_GetPointer        # returns worldId.index1
++b2Body_GetPointer         # returns bodyId.index1
++b2Shape_GetPointer        # returns shapeId.index1
++b2Joint_GetPointer        # returns jointId.index1
++b2World_DeleteCallback    # frees the handle returned by b2World_SetCustomFilterCallback / b2World_SetPreSolveCallback

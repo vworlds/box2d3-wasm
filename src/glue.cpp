@@ -16,6 +16,16 @@ emscripten::val toBytes(const T& value) {
     return array;
 }
 
+// Package-defined result types for C functions that return two floats through out-pointers
+// (b2Joint_GetConstraintTuning, b2DistanceJoint_GetSpringForceRange).
+struct b2ConstraintTuning { float hertz; float dampingRatio; };
+struct b2ForceRange { float lowerForce; float upperForce; };
+
+// User data is exposed as an unsigned 32-bit integer stored in the void* (the same convention as
+// b2x_Body_SetUserData and b2x_Shape_SetUserData in fastpath.cpp). It is a number, not an object.
+static inline void* UserDataFromInt(uint32_t value) { return (void*)(uintptr_t)value; }
+static inline uint32_t UserDataToInt(void* data) { return (uint32_t)(uintptr_t)data; }
+
 EMSCRIPTEN_BINDINGS(box2dcpp) {
     class_<b2Vec2>("b2Vec2")
         .constructor()
@@ -269,7 +279,15 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .property("shapeIdB", &b2ContactBeginTouchEvent::shapeIdB)
     ;
 
+    value_object<b2ContactId>("b2ContactId")
+        .field("index1", &b2ContactId::index1)
+        .field("world0", &b2ContactId::world0)
+        .field("padding", &b2ContactId::padding)
+        .field("generation", &b2ContactId::generation)
+        ;
+
     class_<b2ContactData>("b2ContactData")
+        .property("contactId", &b2ContactData::contactId)
         .property("shapeIdA", &b2ContactData::shapeIdA)
         .property("shapeIdB", &b2ContactData::shapeIdB)
         .property("manifold", &b2ContactData::manifold, return_value_policy::reference())
@@ -332,7 +350,24 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .field("leafVisits", &b2TreeStats::leafVisits)
         ;
 
+    value_object<b2Version>("b2Version")
+        .field("major", &b2Version::major)
+        .field("minor", &b2Version::minor)
+        .field("revision", &b2Version::revision)
+        ;
+
+    // Results of the functions that return two floats through out-pointers in C.
+    value_object<b2ConstraintTuning>("b2ConstraintTuning")
+        .field("hertz", &b2ConstraintTuning::hertz)
+        .field("dampingRatio", &b2ConstraintTuning::dampingRatio)
+        ;
+    value_object<b2ForceRange>("b2ForceRange")
+        .field("lowerForce", &b2ForceRange::lowerForce)
+        .field("upperForce", &b2ForceRange::upperForce)
+        ;
+
     function("b2DefaultQueryFilter", &b2DefaultQueryFilter);
+    function("b2DefaultFilter", &b2DefaultFilter);
 
     class_<b2QueryFilter>("b2QueryFilter")
         .constructor()
@@ -407,6 +442,85 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .constructor()
         .property("point1", &b2Segment::point1, return_value_policy::reference())
         .property("point2", &b2Segment::point2, return_value_policy::reference())
+        ;
+
+    class_<b2ShapeCastInput>("b2ShapeCastInput")
+        .constructor()
+        .property("proxy", &b2ShapeCastInput::proxy, return_value_policy::reference())
+        .property("translation", &b2ShapeCastInput::translation, return_value_policy::reference())
+        .property("maxFraction", &b2ShapeCastInput::maxFraction)
+        .property("canEncroach", &b2ShapeCastInput::canEncroach)
+        ;
+
+    class_<b2ShapeCastPairInput>("b2ShapeCastPairInput")
+        .constructor()
+        .property("proxyA", &b2ShapeCastPairInput::proxyA, return_value_policy::reference())
+        .property("proxyB", &b2ShapeCastPairInput::proxyB, return_value_policy::reference())
+        .property("transformA", &b2ShapeCastPairInput::transformA, return_value_policy::reference())
+        .property("transformB", &b2ShapeCastPairInput::transformB, return_value_policy::reference())
+        .property("translationB", &b2ShapeCastPairInput::translationB, return_value_policy::reference())
+        .property("maxFraction", &b2ShapeCastPairInput::maxFraction)
+        .property("canEncroach", &b2ShapeCastPairInput::canEncroach)
+        ;
+
+    class_<b2SimplexCache>("b2SimplexCache")
+        .constructor()
+        .property("count", &b2SimplexCache::count)
+        .function("GetIndexA", +[](const b2SimplexCache& self, int index) -> int {
+            return (index >= 0 && index < 3) ? self.indexA[index] : 0;
+        })
+        .function("SetIndexA", +[](b2SimplexCache& self, int index, int value) {
+            if (index >= 0 && index < 3) self.indexA[index] = (uint8_t)value;
+        })
+        .function("GetIndexB", +[](const b2SimplexCache& self, int index) -> int {
+            return (index >= 0 && index < 3) ? self.indexB[index] : 0;
+        })
+        .function("SetIndexB", +[](b2SimplexCache& self, int index, int value) {
+            if (index >= 0 && index < 3) self.indexB[index] = (uint8_t)value;
+        })
+        ;
+
+    class_<b2SegmentDistanceResult>("b2SegmentDistanceResult")
+        .constructor()
+        .property("closest1", &b2SegmentDistanceResult::closest1, return_value_policy::reference())
+        .property("closest2", &b2SegmentDistanceResult::closest2, return_value_policy::reference())
+        .property("fraction1", &b2SegmentDistanceResult::fraction1)
+        .property("fraction2", &b2SegmentDistanceResult::fraction2)
+        .property("distanceSquared", &b2SegmentDistanceResult::distanceSquared)
+        ;
+
+    class_<b2Sweep>("b2Sweep")
+        .constructor()
+        .property("localCenter", &b2Sweep::localCenter, return_value_policy::reference())
+        .property("c1", &b2Sweep::c1, return_value_policy::reference())
+        .property("c2", &b2Sweep::c2, return_value_policy::reference())
+        .property("q1", &b2Sweep::q1, return_value_policy::reference())
+        .property("q2", &b2Sweep::q2, return_value_policy::reference())
+        ;
+
+    class_<b2TOIInput>("b2TOIInput")
+        .constructor()
+        .property("proxyA", &b2TOIInput::proxyA, return_value_policy::reference())
+        .property("proxyB", &b2TOIInput::proxyB, return_value_policy::reference())
+        .property("sweepA", &b2TOIInput::sweepA, return_value_policy::reference())
+        .property("sweepB", &b2TOIInput::sweepB, return_value_policy::reference())
+        .property("maxFraction", &b2TOIInput::maxFraction)
+        ;
+
+    enum_<b2TOIState>("b2TOIState")
+        .value("b2_toiStateUnknown", b2_toiStateUnknown)
+        .value("b2_toiStateFailed", b2_toiStateFailed)
+        .value("b2_toiStateOverlapped", b2_toiStateOverlapped)
+        .value("b2_toiStateHit", b2_toiStateHit)
+        .value("b2_toiStateSeparated", b2_toiStateSeparated)
+        ;
+
+    class_<b2TOIOutput>("b2TOIOutput")
+        .constructor()
+        .property("state", &b2TOIOutput::state)
+        .property("point", &b2TOIOutput::point, return_value_policy::reference())
+        .property("normal", &b2TOIOutput::normal, return_value_policy::reference())
+        .property("fraction", &b2TOIOutput::fraction)
         ;
 
     class_<b2Filter>("b2Filter")
@@ -514,6 +628,9 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
     function("b2Chain_IsValid", &b2Chain_IsValid);
     function("b2DefaultChainDef", &b2DefaultChainDef);
     function("b2Chain_GetSegmentCount", &b2Chain_GetSegmentCount);
+    function("b2Chain_GetWorld", &b2Chain_GetWorld);
+    function("b2Chain_SetSurfaceMaterial", &b2Chain_SetSurfaceMaterial, allow_raw_pointers());
+    function("b2Chain_GetSurfaceMaterial", &b2Chain_GetSurfaceMaterial);
     function("b2Chain_GetSegments", +[](b2ChainId chainId, int capacity) -> emscripten::val {
         std::vector<b2ShapeId> segments(capacity);
         int count = b2Chain_GetSegments(chainId, segments.data(), capacity);
@@ -646,14 +763,31 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
     function("b2PointInCapsule", &b2PointInCapsule, allow_raw_pointers());
     function("b2PointInPolygon", &b2PointInPolygon, allow_raw_pointers());
     function("b2IsValidRay", &b2IsValidRay, allow_raw_pointers());
-    // function("b2RayCastCircle", &b2RayCastCircle, allow_raw_pointers());
-    // function("b2RayCastCapsule", &b2RayCastCapsule, allow_raw_pointers());
-    // function("b2RayCastSegment", &b2RayCastSegment, allow_raw_pointers());
-    // function("b2RayCastPolygon", &b2RayCastPolygon, allow_raw_pointers());
-    // function("b2ShapeCastCircle", &b2ShapeCastCircle, allow_raw_pointers());
-    // function("b2ShapeCastCapsule", &b2ShapeCastCapsule, allow_raw_pointers());
-    // function("b2ShapeCastSegment", &b2ShapeCastSegment, allow_raw_pointers());
-    // function("b2ShapeCastPolygon", &b2ShapeCastPolygon, allow_raw_pointers());
+    function("b2RayCastCircle", &b2RayCastCircle, allow_raw_pointers());
+    function("b2RayCastCapsule", &b2RayCastCapsule, allow_raw_pointers());
+    function("b2RayCastSegment", &b2RayCastSegment, allow_raw_pointers());
+    function("b2RayCastPolygon", &b2RayCastPolygon, allow_raw_pointers());
+    function("b2ShapeCastCircle", &b2ShapeCastCircle, allow_raw_pointers());
+    function("b2ShapeCastCapsule", &b2ShapeCastCapsule, allow_raw_pointers());
+    function("b2ShapeCastSegment", &b2ShapeCastSegment, allow_raw_pointers());
+    function("b2ShapeCastPolygon", &b2ShapeCastPolygon, allow_raw_pointers());
+    function("b2ShapeCast", &b2ShapeCast, allow_raw_pointers());
+    function("b2TimeOfImpact", &b2TimeOfImpact, allow_raw_pointers());
+    function("b2ValidateHull", &b2ValidateHull, allow_raw_pointers());
+    function("b2SegmentDistance", &b2SegmentDistance);
+    function("b2GetSweepTransform", &b2GetSweepTransform, allow_raw_pointers());
+    function("b2CollideCircles", &b2CollideCircles, allow_raw_pointers());
+    function("b2CollideCapsuleAndCircle", &b2CollideCapsuleAndCircle, allow_raw_pointers());
+    function("b2CollideSegmentAndCircle", &b2CollideSegmentAndCircle, allow_raw_pointers());
+    function("b2CollidePolygonAndCircle", &b2CollidePolygonAndCircle, allow_raw_pointers());
+    function("b2CollideCapsules", &b2CollideCapsules, allow_raw_pointers());
+    function("b2CollideSegmentAndCapsule", &b2CollideSegmentAndCapsule, allow_raw_pointers());
+    function("b2CollidePolygonAndCapsule", &b2CollidePolygonAndCapsule, allow_raw_pointers());
+    function("b2CollidePolygons", &b2CollidePolygons, allow_raw_pointers());
+    function("b2CollideSegmentAndPolygon", &b2CollideSegmentAndPolygon, allow_raw_pointers());
+    function("b2CollideChainSegmentAndCircle", &b2CollideChainSegmentAndCircle, allow_raw_pointers());
+    function("b2CollideChainSegmentAndCapsule", &b2CollideChainSegmentAndCapsule, allow_raw_pointers());
+    function("b2CollideChainSegmentAndPolygon", &b2CollideChainSegmentAndPolygon, allow_raw_pointers());
 
     enum_<b2ShapeType>("b2ShapeType")
         .value("b2_circleShape", b2_circleShape)
@@ -1023,7 +1157,6 @@ EMSCRIPTEN_BINDINGS(box2d) {
             return (*g_restitutionCallback)(restitutionA, userMaterialIdA, restitutionB, userMaterialIdB).as<float>();
         });
     });
-    // function("b2World_DumpMemoryStats", &b2World_DumpMemoryStats);
 
     class_<b2RayCallbackResult>("b2RayCallbackResult")
         .constructor<>()
@@ -1188,6 +1321,10 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2World_RebuildStaticTree", &b2World_RebuildStaticTree);
     function("b2World_EnableSpeculative", &b2World_EnableSpeculative);
     function("b2World_IsValid", &b2World_IsValid);
+    function("b2World_SetUserData", +[](b2WorldId worldId, uint32_t value) { b2World_SetUserData(worldId, UserDataFromInt(value)); });
+    function("b2World_GetUserData", +[](b2WorldId worldId) -> uint32_t { return UserDataToInt(b2World_GetUserData(worldId)); });
+    // b2World_DumpMemoryStats is not bound: it writes box2d_memory.txt with fopen, and with
+    // FILESYSTEM=0 the write throws inside the runtime (see scripts/bindings-exceptions.txt).
 
 
     // ------------------------------------------------------------------------
@@ -1255,6 +1392,10 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2Shape_ComputeMassData", &b2Shape_ComputeMassData);
     function("b2Shape_GetClosestPoint", &b2Shape_GetClosestPoint);
     function("b2Shape_ApplyWind", &b2Shape_ApplyWind);
+    function("b2Shape_SetUserData", +[](b2ShapeId shapeId, uint32_t value) { b2Shape_SetUserData(shapeId, UserDataFromInt(value)); });
+    function("b2Shape_GetUserData", +[](b2ShapeId shapeId) -> uint32_t { return UserDataToInt(b2Shape_GetUserData(shapeId)); });
+    function("b2Shape_SetUserMaterial", &b2Shape_SetUserMaterial);
+    function("b2Shape_GetUserMaterial", &b2Shape_GetUserMaterial);
 
     // ------------------------------------------------------------------------
     // b2Body
@@ -1355,6 +1496,11 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2Body_GetLocalPointVelocity", &b2Body_GetLocalPointVelocity);
     function("b2Body_GetWorldPointVelocity", &b2Body_GetWorldPointVelocity);
     function("b2Body_IsValid", &b2Body_IsValid);
+    function("b2Body_SetName", +[](b2BodyId bodyId, const std::string& name) { b2Body_SetName(bodyId, name.c_str()); });
+    function("b2Body_GetName", +[](b2BodyId bodyId) -> std::string { return std::string(b2Body_GetName(bodyId)); });
+    function("b2Body_SetUserData", +[](b2BodyId bodyId, uint32_t value) { b2Body_SetUserData(bodyId, UserDataFromInt(value)); });
+    function("b2Body_GetUserData", +[](b2BodyId bodyId) -> uint32_t { return UserDataToInt(b2Body_GetUserData(bodyId)); });
+    function("b2Body_WakeTouching", &b2Body_WakeTouching);
 
     // ------------------------------------------------------------------------
     // b2Joint
@@ -1396,6 +1542,19 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2Joint_GetForceThreshold", &b2Joint_GetForceThreshold);
     function("b2Joint_SetTorqueThreshold", &b2Joint_SetTorqueThreshold);
     function("b2Joint_GetTorqueThreshold", &b2Joint_GetTorqueThreshold);
+    function("b2Joint_SetUserData", +[](b2JointId jointId, uint32_t value) { b2Joint_SetUserData(jointId, UserDataFromInt(value)); });
+    function("b2Joint_GetUserData", +[](b2JointId jointId) -> uint32_t { return UserDataToInt(b2Joint_GetUserData(jointId)); });
+    function("b2Joint_GetLinearSeparation", &b2Joint_GetLinearSeparation);
+    function("b2Joint_GetAngularSeparation", &b2Joint_GetAngularSeparation);
+    function("b2Joint_SetConstraintTuning", &b2Joint_SetConstraintTuning);
+    function("b2Joint_GetConstraintTuning", +[](b2JointId jointId) -> b2ConstraintTuning {
+        b2ConstraintTuning tuning;
+        b2Joint_GetConstraintTuning(jointId, &tuning.hertz, &tuning.dampingRatio);
+        return tuning;
+    });
+
+    function("b2Contact_IsValid", &b2Contact_IsValid);
+    function("b2Contact_GetData", &b2Contact_GetData);
 
     function("b2DistanceJoint_SetLength", &b2DistanceJoint_SetLength);
     function("b2DistanceJoint_GetLength", &b2DistanceJoint_GetLength);
@@ -1418,6 +1577,12 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2DistanceJoint_SetMaxMotorForce", &b2DistanceJoint_SetMaxMotorForce);
     function("b2DistanceJoint_GetMaxMotorForce", &b2DistanceJoint_GetMaxMotorForce);
     function("b2DistanceJoint_GetMotorForce", &b2DistanceJoint_GetMotorForce);
+    function("b2DistanceJoint_SetSpringForceRange", &b2DistanceJoint_SetSpringForceRange);
+    function("b2DistanceJoint_GetSpringForceRange", +[](b2JointId jointId) -> b2ForceRange {
+        b2ForceRange range;
+        b2DistanceJoint_GetSpringForceRange(jointId, &range.lowerForce, &range.upperForce);
+        return range;
+    });
 
     function("b2MotorJoint_SetLinearVelocity", &b2MotorJoint_SetLinearVelocity);
     function("b2MotorJoint_GetLinearVelocity", &b2MotorJoint_GetLinearVelocity);
@@ -1460,6 +1625,8 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2PrismaticJoint_GetMotorForce", &b2PrismaticJoint_GetMotorForce);
     function("b2PrismaticJoint_GetTranslation", &b2PrismaticJoint_GetTranslation);
     function("b2PrismaticJoint_GetSpeed", &b2PrismaticJoint_GetSpeed);
+    function("b2PrismaticJoint_SetTargetTranslation", &b2PrismaticJoint_SetTargetTranslation);
+    function("b2PrismaticJoint_GetTargetTranslation", &b2PrismaticJoint_GetTargetTranslation);
 
     function("b2RevoluteJoint_EnableSpring", &b2RevoluteJoint_EnableSpring);
     function("b2RevoluteJoint_IsSpringEnabled", &b2RevoluteJoint_IsSpringEnabled);
@@ -1480,6 +1647,8 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2RevoluteJoint_GetMotorTorque", &b2RevoluteJoint_GetMotorTorque);
     function("b2RevoluteJoint_SetMaxMotorTorque", &b2RevoluteJoint_SetMaxMotorTorque);
     function("b2RevoluteJoint_GetMaxMotorTorque", &b2RevoluteJoint_GetMaxMotorTorque);
+    function("b2RevoluteJoint_SetTargetAngle", &b2RevoluteJoint_SetTargetAngle);
+    function("b2RevoluteJoint_GetTargetAngle", &b2RevoluteJoint_GetTargetAngle);
 
     function("b2WeldJoint_SetLinearHertz", &b2WeldJoint_SetLinearHertz);
     function("b2WeldJoint_GetLinearHertz", &b2WeldJoint_GetLinearHertz);
@@ -1530,6 +1699,22 @@ EMSCRIPTEN_BINDINGS(box2d) {
     });
 
     constant("B2_PI", B2_PI);
+    function("b2GetByteCount", &b2GetByteCount);
+    function("b2GetVersion", &b2GetVersion);
+    // Ticks are 64-bit: BigInt in JavaScript. The package's profile-timer switch makes both return 0.
+    function("b2GetTicks", &b2GetTicks);
+    function("b2GetMilliseconds", &b2GetMilliseconds);
+    function("b2Yield", &b2Yield);
+    function("b2IsValidFloat", &b2IsValidFloat);
+    function("b2IsValidVec2", &b2IsValidVec2);
+    function("b2IsValidRotation", &b2IsValidRotation);
+    function("b2IsValidTransform", &b2IsValidTransform);
+    function("b2IsValidAABB", &b2IsValidAABB);
+    function("b2Atan2", &b2Atan2);
+    function("b2ComputeCosSin", &b2ComputeCosSin);
+    function("b2ComputeRotationBetweenUnitVectors", &b2ComputeRotationBetweenUnitVectors);
+    function("b2SetLengthUnitsPerMeter", &b2SetLengthUnitsPerMeter);
+    function("b2GetLengthUnitsPerMeter", &b2GetLengthUnitsPerMeter);
     function("b2Dot", &b2Dot);
     function("b2Cross", &b2Cross);
     function("b2CrossVS", &b2CrossVS);
