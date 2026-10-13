@@ -1,7 +1,7 @@
 // Fast-path usage example for docs/fastpath.md. Typechecked against the built declarations
 // (see "Verifying" in docs/fastpath.md).
-import Box2DFactory from "box2d3-wasm";
-import { createFastPath } from "box2d3-wasm/fastpath";
+import Box2DFactory from "@vworlds/box2d3-wasm";
+import { createFastPath } from "@vworlds/box2d3-wasm/fastpath";
 
 const box2d = await Box2DFactory();
 const fp = createFastPath(box2d);

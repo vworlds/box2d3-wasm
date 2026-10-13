@@ -1,6 +1,6 @@
 # Patches against the Box2D submodule
 
-`shell/0_build_makefile.sh` applies every `box2d/*.patch` here to `../box2d` before generating
+`scripts/build.sh` applies every `box2d/*.patch` here to the `box2d` submodule before generating
 the Makefile (idempotently: a patch that already applies in reverse is skipped). Each patch is a
 plain `git diff` against Box2D `3a4f0da`, kept small so it rebases onto newer Box2D by hand.
 

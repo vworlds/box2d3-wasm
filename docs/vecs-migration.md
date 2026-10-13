@@ -4,26 +4,27 @@ This guide is for the vecs maintainers. It lists each Box2D call site in `lib/ve
 (and the one in `vecs-phaser-server`): what it calls today, what it should call, the order to
 migrate in, and the measured gain per step.
 
-The reference implementation is the scratch adapter in `perf/adapter/0001…0007-*.patch` (apply
-with `git am` onto vecs `2d58dd7`). Every step below keeps all seven benchmark checksums
-identical to stock box2d3-wasm 5.2.0 and passes `@vworlds/vecs-physics` (536 tests),
+The reference implementation was a scratch adapter written against vecs `2d58dd7`; it is not part
+of this repository. With it, every step below kept all seven benchmark checksums identical to
+stock box2d3-wasm 5.2.0 and passed `@vworlds/vecs-physics` (536 tests),
 `@vworlds/vecs-phaser-server` (154, including `motion_accuracy.test.ts`) and
-`@vworlds/vecs-phaser` (119). API reference: [`box2d3-wasm/docs/fastpath.md`](../box2d3-wasm/docs/fastpath.md).
+`@vworlds/vecs-phaser` (119). API reference: [fastpath.md](fastpath.md).
 
-Prices below were measured in one session on the same machine (`perf/bench/embind-ops.mjs` vs
-`perf/bench/fastpath-ops.mjs`, ns per call). This host ran about 2× slower than in Phase 1, so
+Prices below were measured in one session on the same machine with micro-benchmarks that are no
+longer part of this repository (ns per call). This host ran about 2× slower than in Phase 1, so
 compare within a row, not across documents.
 
 ## Step 0: swap the dependency (no code change)
 
 ```jsonc
 // lib/vecs-physics/package.json
-"box2d3-wasm": "npm:@vworlds/box2d3-wasm@5.2.0-vworlds.1"
+"box2d3-wasm": "npm:@vworlds/box2d3-wasm@^6.0.0"
 ```
 
-The npm alias keeps every `import … from "box2d3-wasm"` unchanged. The embind API is upstream's,
-byte for byte. Unmodified vecs passes all three suites on the fork and gives the stock checksums
-(proven every round). See `REPORT.md` → "Publishing" for where the package is available.
+Once the package is published, the npm alias keeps every `import … from "box2d3-wasm"` unchanged. The flat embind API is
+upstream's, unchanged; the object-oriented classes, threading and debug draw that upstream also
+ships are not in this package. Unmodified vecs passes all three suites on this package and gives
+the stock checksums.
 
 ## Call sites, in migration order
 
@@ -60,7 +61,9 @@ worlds, step 3 for event-heavy games, step 5 for force-driven ones.
 | 500 bodies with a force and torque each step | 10,296 → 1,639 (**6.3×**) | 8.9× |
 | 2,000 awake bodies at rest | 6,601 → 295 (**22.4×**) | 32.1× |
 
-The audited final table is in `REPORT.md`.
+These numbers were measured before this repository was restructured, with the benchmarks that
+are no longer kept here; the simulation results they ran on are the ones `npm run test:stock`
+checks.
 
 ## Notes for the vecs change
 

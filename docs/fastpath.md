@@ -11,23 +11,24 @@ JavaScript and TypeScript.
 - **Same results.** Every `b2x_` function calls the same public Box2D C function(s) as the embind
   binding, with the same arguments. Ids cross as packed integers; floats cross as `f32`, which
   rounds exactly like embind's float conversion. Results are identical bit for bit.
-  `perf/tests/fastpath-differential.mjs` compares 5.47 million values against their embind twins
-  on both builds.
+  `tests/fastpath-differential.mjs` (`npm test`) compares 5.47 million values against their embind
+  twins on both builds.
 - **No per-call allocation.** The raw exports take and return plain numbers. Structs are
   written into wasm memory you own and read through typed arrays.
 - **Measured cost:** ~9–35 ns per call vs ~130 ns (a scalar embind call taking an id) to
-  ~1,300 ns (one returning a class handle) on the same machine
-  (`perf/bench/fastpath-ops.mjs`, `perf/bench/embind-ops.mjs`).
+  ~1,300 ns (one returning a class handle) on the same machine. These numbers come from
+  micro-benchmarks that are no longer part of this repository.
 
 ## Quick start
 
-`docs/examples/fastpath-example.ts` (it typechecks and runs against the build):
+`docs/examples/fastpath-example.ts` (typechecked against the built declarations, see
+[Verifying](#verifying)):
 
 ```ts
 // Fast-path usage example for docs/fastpath.md. Typechecked against the built declarations
 // (see "Verifying" in docs/fastpath.md).
-import Box2DFactory from "box2d3-wasm";
-import { createFastPath } from "box2d3-wasm/fastpath";
+import Box2DFactory from "@vworlds/box2d3-wasm";
+import { createFastPath } from "@vworlds/box2d3-wasm/fastpath";
 
 const box2d = await Box2DFactory();
 const fp = createFastPath(box2d);
@@ -103,7 +104,7 @@ export function push(index1: number, rev: number): void {
 }
 ```
 
-## The `box2d3-wasm/fastpath` helper
+## The `@vworlds/box2d3-wasm/fastpath` helper
 
 `createFastPath(module)` returns a `FastPath`:
 
@@ -143,10 +144,9 @@ allocate in wasm, and typed views made before the growth must not be used for ne
 | creating or destroying worlds, bodies, shapes, joints, chains; `b2World_Step` / `b2x_World_Step` (contact, pair and island arrays grow); embind calls that return a class by value or marshal a value object; `_malloc` / `fp.alloc` | every `b2x_Body_*` / `b2x_Shape_*` getter and setter, `b2x_World_ExportMoves` (into your buffer), `b2x_World_GetMoveCount`, `b2x_World_Get*Spans`, `b2x_GetLayout` after the first call |
 
 Rule: after a call from the left column and before you read memory, call `fp.sync()` (or use
-`MoveExporter.exportMoves`, which syncs), then re-read `fp.i32` / `fp.f32` /…. In the deluxe
-build memory is a `SharedArrayBuffer`: views made before growth stay valid for their old range,
-and `memory.buffer` is a new object after growth. In the compat build the old buffer is detached
-(old views become length 0). `sync()` handles both.
+`MoveExporter.exportMoves`, which syncs), then re-read `fp.i32` / `fp.f32` /…. Memory is a plain
+(non-shared) `WebAssembly.Memory` in both builds: after growth `memory.buffer` is a new object and
+the old buffer is detached (old views become length 0).
 
 ## Layout descriptor
 
@@ -190,7 +190,7 @@ fields you need in place; nothing is copied.
 ## Per-body functions
 
 All 65 `b2Body_*` functions in `box2d.h` except names, raw `void*` user data and
-`GetContactData` have a generated twin (`tools/gen_fastpath.py`, `csrc/fastpath_body.gen.cpp`,
+`GetContactData` have a generated twin (`scripts/gen_fastpath.py`, `src/fastpath_body.gen.cpp`,
 `src/fastpath_body.gen.d.ts`). Conventions:
 
 - `b2Vec2` / `b2Rot` / `b2Transform` / `b2MassData` arguments are flattened to floats (`xX`, `xY`,
@@ -291,7 +291,7 @@ in a scene of 25 small worlds the step got 4× cheaper. Implemented by
 
 ## TypeScript
 
-`box2d3-wasm/fastpath` exports `createFastPath`, and the types `FastPath`, `MoveExporter`,
+`@vworlds/box2d3-wasm/fastpath` exports `createFastPath`, and the types `FastPath`, `MoveExporter`,
 `FastPathLayout`, `StructLayout`, `FastPathModule`, `FastPathCoreExports` and
 `FastPathBodyExports` (`src/fastpath.d.ts`, `src/fastpath_body.gen.d.ts`). `fp.module` is typed
 `FastPathModule`, so every raw export has named parameters. `MainModule` from the emcc-generated
@@ -301,12 +301,15 @@ declarations also lists the raw exports, with positional names.
 
 `layout.constants.version` (`B2X_VERSION`, currently 1) changes whenever an exported signature
 or record layout changes; `createFastPath` checks it against `_b2x_GetVersion()`. Both builds
-(deluxe: SIMD + threads; compat) carry the same fast path.
+(deluxe: SIMD; compat: no SIMD) carry the same fast path.
 
 ## Verifying
 
 ```bash
-BOX2D_ENTRY=<build>/entry.mjs node perf/tests/fastpath-differential.mjs          # deluxe
-BOX2D_FLAVOUR_FILE=<build>/compat/Box2D.compat.mjs node perf/tests/fastpath-differential.mjs
-python3 box2d3-wasm/tools/gen_fastpath.py --check                                  # generated code current
+npm run build:docker                  # or: npm run build, with emsdk 4.0.18 and TypeScript 5 on PATH
+npm test                              # differential test (deluxe, compat) + integration test, on dist/
+npm run gen:check                     # generated code is current
+npm run test:stock                    # bit-identical to box2d3-wasm 5.2.0 (embind and fast path)
+npx -p typescript@5.9 tsc --noEmit --strict --target es2022 --module nodenext \
+  --moduleResolution nodenext docs/examples/fastpath-example.ts   # the example typechecks
 ```
