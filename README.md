@@ -144,7 +144,7 @@ Both carry the fast path, and `@vworlds/box2d3-wasm/fastpath` works with either.
 ## Build
 
 Requirements: emsdk **4.0.18**, TypeScript 5 as `tsc` (`emcc --emit-tsd` breaks on TypeScript 6),
-cmake, make, git, gawk, Node.js (and Python 3 for `npm run gen`). The output depends on the emsdk version; do not change it together
+cmake, make, git, gawk, Node.js (and Python 3 for `npm run gen`, `gen:check` and `check:bindings`). The output depends on the emsdk version; do not change it together
 with anything else.
 
 ```sh
@@ -179,6 +179,8 @@ npm test           # fast-path differential test + bindings test (both flavours)
 npm run test:stock # step-by-step hashes equal to box2d3-wasm 5.2.0, embind and fast path
 npm run gen:check  # the generated fast-path code is current
 npm run check:bindings  # every C function is bound or excepted (see API coverage)
+npm run test:release    # the release-version script (scripts/release-version.test.mjs)
+npm run check:pack      # npm pack would publish only the expected files (needs dist/)
 ```
 
 `npm run gen` regenerates `src/fastpath_body.gen.cpp` and `src/fastpath_body.gen.d.ts` from
@@ -250,7 +252,7 @@ The demo is not part of the published package (it has its own `package.json`). C
 ## CI
 
 `.github/workflows/ci.yml` runs on pull requests to `dev` and `master` and on pushes to `dev`. It
-builds both flavours once, then runs `gen:check`, `check:bindings`, `npm test`, `npm run test:stock`,
+builds both flavours once, then runs `gen:check`, `check:bindings`, `test:release`, `npm test`, `npm run test:stock`,
 a check of the `npm pack` content, the demo build and the vecs test suites (physics, phaser-server,
 phaser) against the vecs commit pinned in `ci/vecs-ref`. The vecs repository is private: the suites
 need the `VECS_READ_TOKEN` secret and are skipped, with a warning, when it is missing.
@@ -280,7 +282,7 @@ GitHub Pages on the same push. [docs/releasing.md](docs/releasing.md) lists the 
 | `.github/`, `ci/` | workflows, the build action, `vecs-ref` (the pinned vecs commit) |
 | `patches/box2d/` | the patch applied to the Box2D submodule |
 | `box2d/` | Box2D (git submodule) |
-| `tests/` | differential and integration tests, `stock-differential/` |
+| `tests/` | `fastpath-differential.mjs`, `bindings.mjs`, `integration.mjs`, `stock-differential/` |
 | `demo/` | the Phaser 4 demo site (own `package.json`, not published) |
 | `docs/` | [fastpath.md](docs/fastpath.md), [vecs-migration.md](docs/vecs-migration.md), [box2d-update.md](docs/box2d-update.md) |
 | `dist/`, `build/` | build output (not committed) |
