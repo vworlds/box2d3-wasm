@@ -4,8 +4,8 @@ This guide is for the vecs maintainers. It lists each Box2D call site in `lib/ve
 (and the one in `vecs-phaser-server`): what it calls today, what it should call, the order to
 migrate in, and the measured gain per step.
 
-The reference implementation was a scratch adapter written against vecs `2d58dd7`; it is not part
-of this repository. With it, every step below kept all seven benchmark checksums identical to
+The reference implementation was a scratch adapter written against vecs `2d58dd7` (see Step 0
+for where to find it). With it, every step below kept all seven benchmark checksums identical to
 stock box2d3-wasm 5.2.0 and passed `@vworlds/vecs-physics` (536 tests),
 `@vworlds/vecs-phaser-server` (154, including `motion_accuracy.test.ts`) and
 `@vworlds/vecs-phaser` (119). API reference: [fastpath.md](fastpath.md).
@@ -14,17 +14,32 @@ Prices below were measured in one session on the same machine with micro-benchma
 longer part of this repository (ns per call). This host ran about 2× slower than in Phase 1, so
 compare within a row, not across documents.
 
-## Step 0: swap the dependency (no code change)
+## Step 0: swap the dependency (one import changes)
 
-```jsonc
-// lib/vecs-physics/package.json
-"box2d3-wasm": "npm:@vworlds/box2d3-wasm@^6.0.0"
+```sh
+npm uninstall box2d3-wasm -w @vworlds/vecs-physics
+npm install @vworlds/box2d3-wasm@6.0.1 -w @vworlds/vecs-physics --save-exact
 ```
 
-Once the package is published, the npm alias keeps every `import … from "box2d3-wasm"` unchanged. The flat embind API is
-upstream's, unchanged; the object-oriented classes, threading and debug draw that upstream also
-ships are not in this package. Unmodified vecs passes all three suites on this package and gives
-the stock checksums.
+Then change the two places that name the package:
+
+- `lib/vecs-physics/src/adapter/runtime.ts`: `import Box2DFactory from "@vworlds/box2d3-wasm";`
+- `apps/server/package.json`: `--external:@vworlds/box2d3-wasm` in the esbuild command.
+
+Depend on the scoped name, not on an npm alias (`"box2d3-wasm": "npm:@vworlds/box2d3-wasm@…"`).
+With the alias, npm installs the package inside `lib/vecs-physics/node_modules` instead of the
+root `node_modules`, and the declaration build of vecs-physics then fails with TS2742 (an
+inferred type that can only be named through that nested path). Tests and `tsc --noEmit` still
+pass with the alias, so only `npm run build` shows it.
+
+The flat embind API is upstream's, unchanged; the object-oriented classes, threading and debug
+draw that upstream also ships are not in this package. With only this step, vecs `dev` passes
+typecheck, lint, the full build and every suite, and gives the stock checksums. It is not faster
+yet: the speedup comes from the call sites below.
+
+The reference adapter is kept in this repository's history as patches against vecs `2d58dd7`:
+`perf/adapter/` at commit `f72cf60`. Its fast-path import is `box2d3-wasm/fastpath`; with the
+scoped dependency that becomes `@vworlds/box2d3-wasm/fastpath`.
 
 ## Call sites, in migration order
 
