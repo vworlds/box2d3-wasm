@@ -85,6 +85,6 @@ jobs:
       # NODE_AUTH_TOKEN is the secret when it exists and empty otherwise. An empty token makes
       # npm fall back to trusted publishing (OIDC); --provenance needs id-token: write either way.
       - name: Publish
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --loglevel verbose
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
