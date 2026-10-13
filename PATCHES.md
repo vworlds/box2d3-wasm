@@ -7,7 +7,7 @@ changes onto a newer upstream.
 |---|---|
 | box2d3-wasm | [Birch-san/box2d3-wasm](https://github.com/Birch-san/box2d3-wasm) **5.2.0**, commit `ee2a63b` |
 | Box2D (submodule `box2d`) | [erincatto/box2d](https://github.com/erincatto/box2d) `3a4f0da` (unchanged pin) |
-| box2cpp, enkiTS (submodules) | unchanged pins |
+| box2cpp, enkiTS (submodules) | removed (see below) |
 | toolchain | emsdk **4.0.18** (as upstream CI); TypeScript 5 for `emcc --emit-tsd` |
 
 ## What ships (inside `box2d3-wasm/`, the npm package)
@@ -27,8 +27,12 @@ Existing upstream files change in only three places.
 | `shell/1_build_wasm.sh` | modified | compiles the two fast-path sources; exports `HEAP32`, `HEAPF32`, `wasmMemory`; optional `EXTRA_EMCC_OPTS`; copies the helper into `build/dist/es/` |
 | `package.json`, `package-lock.json` | modified | name `@vworlds/box2d3-wasm`, version `5.2.0-vworlds.1`, export `./fastpath`, `publishConfig.access: public` |
 
-The embind glue (`csrc/glue.cpp`, `threading.cpp`, `debugDraw.cpp`), the awk post-processing, the
-`.d.ts` template and `entry.mjs` are untouched. The embind API is byte-for-byte upstream's.
+The flat embind API in `csrc/glue.cpp` is upstream's, unchanged. The following upstream parts were
+removed: the object-oriented classes from box2cpp (`World`, `Body`, `Shape`, `Chain`, the joint
+classes and all `*Ref` / `Basic*Interface` classes), threading (`TaskSystem`, `b2CreateThreadedWorld`,
+enkiTS, the pthread flags and the deluxe awk post-processing of the `.mjs`), and debug draw
+(`b2DebugDraw`, `DebugDrawCommandBuffer`, `b2DefaultDebugDraw`, `b2World_Draw`, the `./utils/*`
+export). `deluxe` is now SIMD, single-threaded, non-shared memory; `compat` is no SIMD.
 
 ### The Box2D patch
 

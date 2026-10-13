@@ -10,14 +10,14 @@
 
 ## Online Demos
 - [box2d v3 samples](https://birch-san.github.io/box2d3-wasm/demo/samples)
-- [pyramid drop demo](https://birch-san.github.io/box2d3-wasm/demo/modern/?threading=1&pyramidHeight=100&hd=0)
+- [pyramid drop demo](https://birch-san.github.io/box2d3-wasm/demo/modern/?pyramidHeight=100&hd=0)
 *You can change the size of the pyramid by editing the "pyramidHeight" URL parameter. Set it to 101 for a pyramid with 5,050 boxes!*
 
 ## Usage
 
 ### Web Usage
 
-See the [pyramid drop demo code](demo/modern/demo.js) for an example of how to use box2d3-wasm in a Web browser. You'll need to serve the assets correctly in order to access performance features such as threading. See the [Serving Requirements](#serving-requirements) section below.
+See the [pyramid drop demo code](demo/modern/demo.js) for an example of how to use box2d3-wasm in a Web browser. See the [Serving Requirements](#serving-requirements) section below.
 
 ### NodeJS Usage
 
@@ -74,16 +74,7 @@ Then, to start the web server run `yarn serve`.
 
 ## Serving Requirements
 
-Note that the server runs with the following CORS headers:
-
-```
-Cross-Origin-Embedder-Policy: require-corp
-Cross-Origin-Opener-Policy: same-origin
-```
-
-These policies are required for the Box2D3 WebAssembly module to run with threading, because it uses the SharedArrayBuffer feature which requires an isolated context for security reasons.
-
-Regardless of whether you use threading: you may need web server customizations (or good defaults) to serve WASM assets with the correct MIME type (`application/wasm`).
+You may need web server customizations (or good defaults) to serve WASM assets with the correct MIME type (`application/wasm`).
 
 ## Run Tests
 

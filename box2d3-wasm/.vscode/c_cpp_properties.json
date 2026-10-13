@@ -2,8 +2,6 @@
   "env": {
     "myIncludePath": [
       "${workspaceFolder}/../box2d/include",
-      "${workspaceFolder}/../box2d/build/_deps/enkits-src/src",
-      "${workspaceFolder}/../box2cpp/include",
       "${env:EMSDK}/upstream/emscripten/system/include"
     ],
     "myDefines": ["__EMSCRIPTEN__"]

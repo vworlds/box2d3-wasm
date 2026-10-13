@@ -62,10 +62,6 @@ jobs:
         run: |
           BOX2D_ENTRY=build-out/entry.mjs node perf/tests/fastpath-differential.mjs
           BOX2D_FLAVOUR_FILE=build-out/compat/Box2D.compat.mjs node perf/tests/fastpath-differential.mjs
-      - name: copy demo utils into the package
-        run: |
-          mkdir -p box2d3-wasm/build/dist/es/utils
-          cp demo/utils/*.mjs demo/utils/*.d.ts box2d3-wasm/build/dist/es/utils/
       - name: pack
         working-directory: box2d3-wasm
         run: npm pack

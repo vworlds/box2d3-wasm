@@ -30,8 +30,8 @@ case "$FLAVOUR" in
     # NOTE: -msimd128 -msse2 flags are probably redundant; I think box2d applies those for us now.
     # https://github.com/erincatto/box2d/blob/0f2b0246f39594e93fcc8dde0fe0bb1b20b403f9/src/CMakeLists.txt#L170
     # but I think it should be harmless to have the options duplicated.
-    CFLAGS=(${CFLAGS[@]} -msimd128 -msse2 -pthread -s USE_PTHREADS=1)
-    CXXFLAGS=(${CXXFLAGS[@]} -msimd128 -msse2 -pthread -s USE_PTHREADS=1)
+    CFLAGS=(${CFLAGS[@]} -msimd128 -msse2)
+    CXXFLAGS=(${CXXFLAGS[@]} -msimd128 -msse2)
     ;;
   *)
     >&2 echo -e "${Red}FLAVOUR not set.${NC}"

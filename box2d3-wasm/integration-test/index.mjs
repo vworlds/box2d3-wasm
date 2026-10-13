@@ -1,8 +1,4 @@
 import { strict as assert } from 'assert';
-import { cpus } from 'os';
-// pthread pool size is set to navigator.hardwareConcurrency, which is not implemented on (for example) Node 20
-globalThis.navigator ??= {};
-globalThis.navigator.hardwareConcurrency ??= cpus().length;
 import Box2DFactory from '../build/dist/es/entry.mjs'
 
 const box2d = await Box2DFactory();
@@ -61,57 +57,6 @@ const box2d = await Box2DFactory();
     b2World_Step(worldId, timeStep, subStepCount);
     const position = b2Body_GetPosition(bodyId);
     const rotation = b2Body_GetRotation(bodyId);
-    console.log(position.x, position.y, b2Rot_GetAngle(rotation));
-  }
-})();
-
-
-// CPP Interface
-(() => {
-  const {
-      b2DefaultWorldDef,
-      b2WorldDef,
-      World,
-      b2MakeBox,
-      b2DefaultBodyDef,
-      b2DefaultShapeDef,
-      b2BodyDef,
-      b2BodyType,
-      b2Rot_GetAngle,
-      b2Vec2
-  } = box2d;
-
-  const B2_SECRET_COOKIE = 1152023;
-  const worldDef = b2DefaultWorldDef();
-  assert(worldDef.internalValue === B2_SECRET_COOKIE);
-  
-  const world = new World(new b2WorldDef(worldDef));
-
-  const sideLengthMetres = 1;
-  const square = b2MakeBox(sideLengthMetres, sideLengthMetres);
-  console.log('square', square);
-
-  const zero = new b2Vec2(0, 0);
-
-  const bd = new b2DefaultBodyDef();
-  bd.type = b2BodyType.b2_dynamicBody;
-  bd.position = zero;
-
-  const shapeDef = b2DefaultShapeDef();
-  shapeDef.density = 1.0;
-  shapeDef.material.friction = 0.3;
-
-  const body = world.CreateBody(new b2BodyDef(bd));
-  body.CreatePolygonShape(shapeDef, square);
-
-  const timeStep = 1.0 / 60.0;
-  const subStepCount = 4;
-
-  for (let i = 0; i < 90; ++i)
-  {
-    world.Step(timeStep, subStepCount);
-    const position = body.GetPosition();
-    const rotation = body.GetRotation();
     console.log(position.x, position.y, b2Rot_GetAngle(rotation));
   }
 })();

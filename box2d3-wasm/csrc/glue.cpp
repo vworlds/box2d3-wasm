@@ -1,48 +1,10 @@
 #include <box2d/box2d.h>
 #include <box2d/math_functions.h>
-#include <box2cpp/box2cpp.h>
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include <malloc.h>
 
 using namespace emscripten;
-using namespace b2;
-
-template<typename T>
-struct GetInterfaceType;
-
-template<>
-struct GetInterfaceType<Body> {
-    using type = BasicBodyInterface<Body, false>;
-};
-
-template<>
-struct GetInterfaceType<Shape> {
-    using type = BasicShapeInterface<Shape, false>;
-};
-
-template<>
-struct GetInterfaceType<Joint> {
-    using type = BasicJointInterface<Joint, false>;
-};
-
-template<typename T, typename ObjectType>
-emscripten::val getArrayWrapper(const ObjectType& object,
-    int (GetInterfaceType<ObjectType>::type::*getCount)() const,
-    int (GetInterfaceType<ObjectType>::type::*getData)(T*, int) const) {
-
-    int capacity = (object.*getCount)();
-    if (capacity == 0) return emscripten::val::array();
-
-    std::vector<T> items(capacity);
-    int count = (object.*getData)(items.data(), capacity);
-
-    auto result = emscripten::val::array();
-    for (int i = 0; i < count; i++) {
-        result.set(i, items[i]);
-    }
-    return result;
-}
 
 template<typename T>
 emscripten::val toBytes(const T& value) {
@@ -424,48 +386,6 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .property("hit", &b2RayResult::hit)
         ;
 
-    class_<BasicWorldInterface<World, false>>("BasicWorldInterface");
-    class_<MaybeConstWorldRef<false>>("WorldRef");
-    class_<MaybeConstWorldRef<true>>("WorldConstRef");
-    class_<World, base<BasicWorldInterface<World, false>>>("World")
-        .constructor()
-        .constructor<const b2WorldDef&>()
-        .function("Destroy", &b2::World::Destroy)
-        .function("IsValid", &b2::World::IsValid)
-        .function("Step", &b2::World::Step)
-        .function("SetGravity", &b2::World::SetGravity)
-        .function("GetGravity", &b2::World::GetGravity)
-        .function("GetAwakeBodyCount", &b2::World::GetAwakeBodyCount)
-        .function("GetBodyEvents", &b2::World::GetBodyEvents)
-        .function("GetContactEvents", &b2::World::GetContactEvents)
-        .function("SetContactTuning", &b2::World::SetContactTuning)
-        .function("EnableContinuous", &b2::World::EnableContinuous)
-        .function("IsContinuousEnabled", &b2::World::IsContinuousEnabled)
-        .function("EnableSleeping", &b2::World::EnableSleeping)
-        .function("IsSleepingEnabled", &b2::World::IsSleepingEnabled)
-        .function("EnableWarmStarting", &b2::World::EnableWarmStarting)
-        .function("IsWarmStartingEnabled", &b2::World::IsWarmStartingEnabled)
-        .function("SetMaximumLinearSpeed", &b2::World::SetMaximumLinearSpeed)
-        .function("GetMaximumLinearSpeed", &b2::World::GetMaximumLinearSpeed)
-        .function("SetRestitutionThreshold", &b2::World::SetRestitutionThreshold)
-        .function("GetRestitutionThreshold", &b2::World::GetRestitutionThreshold)
-        .function("SetHitEventThreshold", &b2::World::SetHitEventThreshold)
-        .function("GetHitEventThreshold", &b2::World::GetHitEventThreshold)
-        .function("GetCounters", &b2::World::GetCounters)
-        .function("GetProfile", &b2::World::GetProfile)
-        .function("GetSensorEvents", &b2::World::GetSensorEvents)
-        .function("GetJointEvents", &b2::World::GetJointEvents)
-        .function("GetPointer", +[](const World& self) -> emscripten::val {
-            return emscripten::val(self.Handle().index1);
-        })
-        .function("CreateBody", +[](b2::World& world, const b2BodyDef& def) -> Body* {
-            Body* body = new Body();
-            *body = world.CreateBody(b2::Tags::OwningHandle{}, def);
-            return body;
-        }, allow_raw_pointers())
-        .function("Draw", &b2::World::Draw)
-        ;
-
     // ------------------------------------------------------------------------
     // b2Shape
     // ------------------------------------------------------------------------
@@ -690,32 +610,6 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         }, allow_raw_pointers())
         ;
 
-    class_<BasicChainInterface<Chain, false>>("BasicChainInterface");
-
-    class_<Chain, base<BasicChainInterface<Chain, false>>>("Chain")
-        .constructor<>()
-        .function("Destroy", &Chain::Destroy)
-        .function("IsValid", &Chain::IsValid)
-        .function("GetSegmentCount", &Chain::GetSegmentCount)
-        .function("GetSegments", +[](const Chain& self) {
-            int count = self.GetSegmentCount();
-            if (count == 0) return emscripten::val::array();
-
-            std::vector<b2ShapeId> segments(count);
-            int actual = self.GetSegments(segments.data(), count);
-
-            auto result = emscripten::val::array();
-            for (int i = 0; i < actual; i++) {
-                result.set(i, segments[i]);
-            }
-            return result;
-        })
-        .function("GetWorld", select_overload<WorldRef()>(&Chain::GetWorld))
-        .function("GetPointer", +[](const Chain& self) -> emscripten::val {
-            return emscripten::val(self.Handle().index1);
-        })
-        ;
-
     value_object<b2ChainId>("b2ChainId")
         .field("index1", &b2ChainId::index1)
         .field("world0", &b2ChainId::world0)
@@ -768,48 +662,6 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .value("b2_polygonShape", b2_polygonShape)
         .value("b2_chainSegmentShape", b2_chainSegmentShape)
         .value("b2_shapeTypeCount", b2_shapeTypeCount)
-        ;
-
-    class_<BasicShapeInterface<Shape, false>>("BasicShapeInterface");
-
-    class_<Shape, base<BasicShapeInterface<Shape, false>>>("Shape")
-        .constructor()
-        .function("Destroy", &Shape::Destroy)
-        .function("IsValid", &Shape::IsValid)
-        .function("GetAABB", &Shape::GetAABB)
-        .function("GetDensity", &Shape::GetDensity)
-        .function("SetDensity", &Shape::SetDensity)
-        .function("GetFilter", &Shape::GetFilter)
-        .function("SetFilter", &Shape::SetFilter)
-        .function("GetFriction", &Shape::GetFriction)
-        .function("SetFriction", &Shape::SetFriction)
-        .function("GetContactData", +[](const Shape& shape) {
-            return getArrayWrapper<b2ContactData>(shape, &Shape::GetContactCapacity, &Shape::GetContactData);
-        })
-        .function("GetContactCapacity", &Shape::GetContactCapacity)
-        .function("EnableContactEvents", &Shape::EnableContactEvents)
-        .function("AreContactEventsEnabled", &Shape::AreContactEventsEnabled)
-        .function("EnableHitEvents", &Shape::EnableHitEvents)
-        .function("AreHitEventsEnabled", &Shape::AreHitEventsEnabled)
-        .function("IsSensor", &Shape::IsSensor)
-        .function("GetSensorCapacity", &Shape::GetSensorCapacity)
-        .function("GetSensorData", +[](const Shape& shape) {
-            return getArrayWrapper<b2ShapeId>(shape, &Shape::GetSensorCapacity, &Shape::GetSensorData);
-        })
-        .function("EnablePreSolveEvents", &Shape::EnablePreSolveEvents)
-        .function("ArePreSolveEventsEnabled", &Shape::ArePreSolveEventsEnabled)
-        .function("GetClosestPoint", &Shape::GetClosestPoint)
-        .function("RayCast", &Shape::RayCast)
-        .function("TestPoint", &Shape::TestPoint)
-        .function("GetType", &Shape::GetType)
-        .function("GetRestitution", &Shape::GetRestitution)
-        .function("SetRestitution", &Shape::SetRestitution)
-        .function("GetBody", select_overload<BodyRef()>(&Shape::GetBody))
-        .function("GetParentChain", select_overload<ChainRef()>(&Shape::GetParentChain))
-        .function("GetWorld", select_overload<WorldRef()>(&Shape::GetWorld))
-        .function("GetPointer", +[](const Shape& self) -> emscripten::val {
-            return emscripten::val(self.Handle().index1);
-        })
         ;
 
     function("b2DefaultShapeDef", &b2DefaultShapeDef);
@@ -867,108 +719,6 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .property("motionLocks", &b2BodyDef::motionLocks, return_value_policy::reference())
         ;
 
-    class_<BasicBodyInterface<Body, false>>("BasicBodyInterface");
-
-    class_<Body, base<BasicBodyInterface<Body, false>>>("Body")
-        .constructor<>()
-        .function("IsValid", &Body::IsValid)
-        .function("CreateChain", +[](Body& body, const b2ChainDef& def) -> Chain* {
-            Chain* chain = new Chain();
-            *chain = body.CreateChain(Tags::OwningHandle{}, def);
-            return chain;
-        }, emscripten::allow_raw_pointers())
-        .function("CreateCapsuleShape", +[](Body& body, const b2ShapeDef& def, const b2Capsule& capsule) -> Shape* {
-            Shape* shape = new Shape();
-            *shape = body.CreateShape(Tags::OwningHandle{}, def, capsule);
-            return shape;
-        }, emscripten::allow_raw_pointers())
-        .function("CreateCircleShape", +[](Body& body, const b2ShapeDef& def, const b2Circle& circle) -> Shape* {
-            Shape* shape = new Shape();
-            *shape = body.CreateShape(Tags::OwningHandle{}, def, circle);
-            return shape;
-        }, emscripten::allow_raw_pointers())
-        .function("CreatePolygonShape", +[](Body& body, const b2ShapeDef& def, const b2Polygon& polygon) -> Shape* {
-            Shape* shape = new Shape();
-            *shape = body.CreateShape(Tags::OwningHandle{}, def, polygon);
-            return shape;
-        }, emscripten::allow_raw_pointers())
-        .function("CreateSegmentShape", +[](Body& body, const b2ShapeDef& def, const b2Segment& segment) -> Shape* {
-            Shape* shape = new Shape();
-            *shape = body.CreateShape(Tags::OwningHandle{}, def, segment);
-            return shape;
-        }, emscripten::allow_raw_pointers())
-        .function("Destroy", &Body::Destroy)
-        .function("Enable", &Body::Enable)
-        .function("Disable", &Body::Disable)
-        .function("IsEnabled", &Body::IsEnabled)
-        .function("SetAngularDamping", &Body::SetAngularDamping)
-        .function("GetAngularDamping", &Body::GetAngularDamping)
-        .function("SetAngularVelocity", &Body::SetAngularVelocity)
-        .function("GetAngularVelocity", &Body::GetAngularVelocity)
-        .function("ApplyAngularImpulse", &Body::ApplyAngularImpulse)
-        .function("ApplyForce", &Body::ApplyForce)
-        .function("ApplyForceToCenter", &Body::ApplyForceToCenter)
-        .function("ApplyLinearImpulse", &Body::ApplyLinearImpulse)
-        .function("ApplyLinearImpulseToCenter", &Body::ApplyLinearImpulseToCenter)
-        .function("ApplyTorque", &Body::ApplyTorque)
-        .function("ApplyMassFromShapes", &Body::ApplyMassFromShapes)
-        .function("GetMass", &Body::GetMass)
-        .function("SetMassData", &Body::SetMassData)
-        .function("GetMassData", &Body::GetMassData)
-        .function("GetRotationalInertia", &Body::GetRotationalInertia)
-        .function("SetAwake", &Body::SetAwake)
-        .function("IsAwake", &Body::IsAwake)
-        .function("EnableSleep", &Body::EnableSleep)
-        .function("IsSleepEnabled", &Body::IsSleepEnabled)
-        .function("SetSleepThreshold", &Body::SetSleepThreshold)
-        .function("GetSleepThreshold", &Body::GetSleepThreshold)
-        .function("SetBullet", &Body::SetBullet)
-        .function("IsBullet", &Body::IsBullet)
-        .function("ComputeAABB", &Body::ComputeAABB)
-        .function("GetContactCapacity", &Body::GetContactCapacity)
-        .function("GetContactData", +[](const Body& body) {
-            return getArrayWrapper<b2ContactData>(body, &Body::GetContactCapacity, &Body::GetContactData);
-        })
-        .function("EnableContactEvents", &Body::EnableContactEvents)
-        .function("SetGravityScale", &Body::SetGravityScale)
-        .function("GetGravityScale", &Body::GetGravityScale)
-        .function("EnableHitEvents", &Body::EnableHitEvents)
-        .function("GetJointCount", &Body::GetJointCount)
-        .function("GetJoints", +[](const Body& body) {
-            return getArrayWrapper<b2JointId>(body, &Body::GetJointCount, &Body::GetJoints);
-        })
-        .function("SetLinearDamping", &Body::SetLinearDamping)
-        .function("GetLinearDamping", &Body::GetLinearDamping)
-        .function("SetLinearVelocity", &Body::SetLinearVelocity)
-        .function("GetLinearVelocity", &Body::GetLinearVelocity)
-        .function("GetLocalCenterOfMass", &Body::GetLocalCenterOfMass)
-        .function("GetLocalPoint", &Body::GetLocalPoint)
-        .function("GetLocalVector", &Body::GetLocalVector)
-        .function("GetPosition", &Body::GetPosition)
-        .function("GetRotation", &Body::GetRotation)
-        .function("SetTransform", &Body::SetTransform)
-        .function("GetTransform", &Body::GetTransform)
-        .function("GetShapeCount", &Body::GetShapeCount)
-        .function("GetShapes", +[](const Body& body) {
-            return getArrayWrapper<b2ShapeId>(body, &Body::GetShapeCount, &Body::GetShapes);
-        })
-        .function("SetType", &Body::SetType)
-        .function("GetType", &Body::GetType)
-        .function("GetPointer", +[](const Body& self) -> emscripten::val {
-            return emscripten::val(self.Handle().index1);
-        })
-        .function("GetWorld", select_overload<WorldRef()>(&Body::GetWorld))
-        .function("GetWorldCenterOfMass", &Body::GetWorldCenterOfMass)
-        .function("GetWorldPoint", &Body::GetWorldPoint)
-        .function("GetWorldVector", &Body::GetWorldVector)
-        .function("SetName", +[](Body& body, const std::string& name) {
-            body.SetName(name.c_str());
-        })
-        .function("GetName", +[](const Body& body) -> std::string {
-            return std::string(body.GetName());
-        })
-        ;
-
     // ------------------------------------------------------------------------
     // b2Joint
     // ------------------------------------------------------------------------
@@ -982,12 +732,6 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .value("b2_wheelJoint", b2JointType::b2_wheelJoint)
         ;
 
-    class_<b2::MaybeConstBodyRef<false>>("BodyRef");
-    class_<b2::MaybeConstBodyRef<true>>("BodyConstRef");
-    class_<b2::MaybeConstChainRef<false>>("ChainRef");
-    class_<b2::MaybeConstChainRef<true>>("ChainConstRef");
-    class_<BasicJointInterface<Joint, false>>("BasicJointInterface");
-
     class_<b2JointDef>("b2JointDef")
         .constructor()
         .property("bodyIdA", &b2JointDef::bodyIdA)
@@ -996,52 +740,6 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .property("localFrameB", &b2JointDef::localFrameB, return_value_policy::reference())
         .property("collideConnected", &b2JointDef::collideConnected)
     ;
-
-    class_<Joint, base<BasicJointInterface<Joint, false>>>("Joint")
-        .constructor<>()
-        .function("Destroy", &Joint::Destroy)
-        .function("IsValid", &Joint::IsValid)
-        .function("GetBodyA", select_overload<BodyRef()>(&Joint::GetBodyA))
-        .function("GetBodyB", select_overload<BodyRef()>(&Joint::GetBodyB))
-        .function("SetCollideConnected", &Joint::SetCollideConnected)
-        .function("GetCollideConnected", &Joint::GetCollideConnected)
-        .function("GetConstraintForce", &Joint::GetConstraintForce)
-        .function("GetConstraintTorque", &Joint::GetConstraintTorque)
-        .function("SetForceThreshold", &Joint::SetForceThreshold)
-        .function("GetForceThreshold", &Joint::GetForceThreshold)
-        .function("SetTorqueThreshold", &Joint::SetTorqueThreshold)
-        .function("GetTorqueThreshold", &Joint::GetTorqueThreshold)
-        .function("GetLocalFrameA", &Joint::GetLocalFrameA, return_value_policy::reference())
-        .function("GetLocalFrameB", &Joint::GetLocalFrameB, return_value_policy::reference())
-        .function("GetType", &Joint::GetType)
-        .function("WakeBodies", &Joint::WakeBodies)
-        .function("GetWorld", select_overload<WorldRef()>(&Joint::GetWorld))
-        .function("GetPointer", +[](const Joint& self) -> emscripten::val {
-            return emscripten::val(self.Handle().index1);
-        })
-        ;
-
-    class_<b2::MaybeConstJointRef<false>>("JointRef");
-    class_<b2::MaybeConstJointRef<true>>("JointConstRef");
-    class_<b2::MaybeConstDistanceJointRef<false>>("DistanceJointRef");
-    class_<b2::MaybeConstDistanceJointRef<true>>("DistanceJointConstRef");
-    class_<b2::MaybeConstMotorJointRef<false>>("MotorJointRef");
-    class_<b2::MaybeConstMotorJointRef<true>>("MotorJointConstRef");
-    class_<b2::MaybeConstPrismaticJointRef<false>>("PrismaticJointRef");
-    class_<b2::MaybeConstPrismaticJointRef<true>>("PrismaticJointConstRef");
-    class_<b2::MaybeConstRevoluteJointRef<false>>("RevoluteJointRef");
-    class_<b2::MaybeConstRevoluteJointRef<true>>("RevoluteJointConstRef");
-    class_<b2::MaybeConstWeldJointRef<false>>("WeldJointRef");
-    class_<b2::MaybeConstWeldJointRef<true>>("WeldJointConstRef");
-    class_<b2::MaybeConstWheelJointRef<false>>("WheelJointRef");
-    class_<b2::MaybeConstWheelJointRef<true>>("WheelJointConstRef");
-
-    class_<BasicDistanceJointInterface<DistanceJoint, false>>("BasicDistanceJointInterface");
-    class_<BasicMotorJointInterface<MotorJoint, false>>("BasicMotorJointInterface");
-    class_<BasicPrismaticJointInterface<PrismaticJoint, false>>("BasicPrismaticJointInterface");
-    class_<BasicRevoluteJointInterface<RevoluteJoint, false>>("BasicRevoluteJointInterface");
-    class_<BasicWeldJointInterface<WeldJoint, false>>("BasicWeldJointInterface");
-    class_<BasicWheelJointInterface<WheelJoint, false>>("BasicWheelJointInterface");
 
     value_object<b2JointId>("b2JointId")
         .field("index1", &b2JointId::index1)
@@ -1143,158 +841,6 @@ EMSCRIPTEN_BINDINGS(box2dcpp) {
         .property("maxMotorTorque", &b2WheelJointDef::maxMotorTorque)
         .property("motorSpeed", &b2WheelJointDef::motorSpeed)
     ;
-
-    class_<DistanceJoint, base<BasicDistanceJointInterface<DistanceJoint, false>>>("DistanceJoint")
-        .constructor<>()
-        .function("GetCurrentLength", &DistanceJoint::GetCurrentLength)
-        .function("SetLength", &DistanceJoint::SetLength)
-        .function("GetLength", &DistanceJoint::GetLength)
-        .function("SetLengthRange", &DistanceJoint::SetLengthRange)
-        .function("EnableLimit", &DistanceJoint::EnableLimit)
-        .function("IsLimitEnabled", &DistanceJoint::IsLimitEnabled)
-        .function("GetMaxLength", &DistanceJoint::GetMaxLength)
-        .function("SetMaxMotorForce", &DistanceJoint::SetMaxMotorForce)
-        .function("GetMaxMotorForce", &DistanceJoint::GetMaxMotorForce)
-        .function("GetMinLength", &DistanceJoint::GetMinLength)
-        .function("EnableMotor", &DistanceJoint::EnableMotor)
-        .function("IsMotorEnabled", &DistanceJoint::IsMotorEnabled)
-        .function("GetMotorForce", &DistanceJoint::GetMotorForce)
-        .function("SetMotorSpeed", &DistanceJoint::SetMotorSpeed)
-        .function("GetMotorSpeed", &DistanceJoint::GetMotorSpeed)
-        .function("EnableSpring", &DistanceJoint::EnableSpring)
-        .function("IsSpringEnabled", &DistanceJoint::IsSpringEnabled)
-        .function("SetSpringDampingRatio", &DistanceJoint::SetSpringDampingRatio)
-        .function("GetSpringDampingRatio", &DistanceJoint::GetSpringDampingRatio)
-        .function("SetSpringHertz", &DistanceJoint::SetSpringHertz)
-        .function("GetSpringHertz", &DistanceJoint::GetSpringHertz);
-
-    class_<MotorJoint, base<BasicMotorJointInterface<MotorJoint, false>>>("MotorJoint")
-        .constructor<>()
-        .function("SetAngularDampingRatio", &MotorJoint::SetAngularDampingRatio)
-        .function("GetAngularDampingRatio", &MotorJoint::GetAngularDampingRatio)
-        .function("SetAngularHertz", &MotorJoint::SetAngularHertz)
-        .function("GetAngularHertz", &MotorJoint::GetAngularHertz)
-        .function("SetAngularVelocity", &MotorJoint::SetAngularVelocity)
-        .function("GetAngularVelocity", &MotorJoint::GetAngularVelocity)
-        .function("SetLinearDampingRatio", &MotorJoint::SetLinearDampingRatio)
-        .function("GetLinearDampingRatio", &MotorJoint::GetLinearDampingRatio)
-        .function("SetLinearHertz", &MotorJoint::SetLinearHertz)
-        .function("GetLinearHertz", &MotorJoint::GetLinearHertz)
-        .function("SetLinearVelocity", &MotorJoint::SetLinearVelocity)
-        .function("GetLinearVelocity", &MotorJoint::GetLinearVelocity)
-        .function("SetMaxSpringForce", &MotorJoint::SetMaxSpringForce)
-        .function("GetMaxSpringForce", &MotorJoint::GetMaxSpringForce)
-        .function("SetMaxSpringTorque", &MotorJoint::SetMaxSpringTorque)
-        .function("GetMaxSpringTorque", &MotorJoint::GetMaxSpringTorque)
-        .function("SetMaxVelocityForce", &MotorJoint::SetMaxVelocityForce)
-        .function("GetMaxVelocityForce", &MotorJoint::GetMaxVelocityForce)
-        .function("SetMaxVelocityTorque", &MotorJoint::SetMaxVelocityTorque)
-        .function("GetMaxVelocityTorque", &MotorJoint::GetMaxVelocityTorque)
-    ;
-
-    class_<PrismaticJoint, base<BasicPrismaticJointInterface<PrismaticJoint, false>>>("PrismaticJoint")
-        .constructor<>()
-        .function("EnableLimit", &PrismaticJoint::EnableLimit)
-        .function("IsLimitEnabled", &PrismaticJoint::IsLimitEnabled)
-        .function("SetLimits", &PrismaticJoint::SetLimits)
-        .function("GetLowerLimit", &PrismaticJoint::GetLowerLimit)
-        .function("SetMaxMotorForce", &PrismaticJoint::SetMaxMotorForce)
-        .function("GetMaxMotorForce", &PrismaticJoint::GetMaxMotorForce)
-        .function("EnableMotor", &PrismaticJoint::EnableMotor)
-        .function("IsMotorEnabled", &PrismaticJoint::IsMotorEnabled)
-        .function("GetMotorForce", &PrismaticJoint::GetMotorForce)
-        .function("SetMotorSpeed", &PrismaticJoint::SetMotorSpeed)
-        .function("GetMotorSpeed", &PrismaticJoint::GetMotorSpeed)
-        .function("GetSpeed", &PrismaticJoint::GetSpeed)
-        .function("EnableSpring", &PrismaticJoint::EnableSpring)
-        .function("IsSpringEnabled", &PrismaticJoint::IsSpringEnabled)
-        .function("SetSpringDampingRatio", &PrismaticJoint::SetSpringDampingRatio)
-        .function("GetSpringDampingRatio", &PrismaticJoint::GetSpringDampingRatio)
-        .function("SetSpringHertz", &PrismaticJoint::SetSpringHertz)
-        .function("GetSpringHertz", &PrismaticJoint::GetSpringHertz)
-        .function("GetTranslation", &PrismaticJoint::GetTranslation)
-        .function("GetUpperLimit", &PrismaticJoint::GetUpperLimit);
-
-    class_<RevoluteJoint, base<BasicRevoluteJointInterface<RevoluteJoint, false>>>("RevoluteJoint")
-        .constructor<>()
-        .function("GetAngle", &RevoluteJoint::GetAngle)
-        .function("EnableLimit", &RevoluteJoint::EnableLimit)
-        .function("IsLimitEnabled", &RevoluteJoint::IsLimitEnabled)
-        .function("SetLimits", &RevoluteJoint::SetLimits)
-        .function("GetLowerLimit", &RevoluteJoint::GetLowerLimit)
-        .function("SetMaxMotorTorque", &RevoluteJoint::SetMaxMotorTorque)
-        .function("GetMaxMotorTorque", &RevoluteJoint::GetMaxMotorTorque)
-        .function("EnableMotor", &RevoluteJoint::EnableMotor)
-        .function("IsMotorEnabled", &RevoluteJoint::IsMotorEnabled)
-        .function("SetMotorSpeed", &RevoluteJoint::SetMotorSpeed)
-        .function("GetMotorSpeed", &RevoluteJoint::GetMotorSpeed)
-        .function("GetMotorTorque", &RevoluteJoint::GetMotorTorque)
-        .function("EnableSpring", &RevoluteJoint::EnableSpring)
-        .function("IsSpringEnabled", &RevoluteJoint::IsSpringEnabled)
-        .function("SetSpringDampingRatio", &RevoluteJoint::SetSpringDampingRatio)
-        .function("GetSpringDampingRatio", &RevoluteJoint::GetSpringDampingRatio)
-        .function("SetSpringHertz", &RevoluteJoint::SetSpringHertz)
-        .function("GetSpringHertz", &RevoluteJoint::GetSpringHertz)
-        .function("GetUpperLimit", &RevoluteJoint::GetUpperLimit);
-
-    class_<WeldJoint, base<BasicWeldJointInterface<WeldJoint, false>>>("WeldJoint")
-        .constructor<>()
-        .function("SetAngularDampingRatio", &WeldJoint::SetAngularDampingRatio)
-        .function("GetAngularDampingRatio", &WeldJoint::GetAngularDampingRatio)
-        .function("SetAngularHertz", &WeldJoint::SetAngularHertz)
-        .function("GetAngularHertz", &WeldJoint::GetAngularHertz)
-        .function("SetLinearDampingRatio", &WeldJoint::SetLinearDampingRatio)
-        .function("GetLinearDampingRatio", &WeldJoint::GetLinearDampingRatio)
-        .function("SetLinearHertz", &WeldJoint::SetLinearHertz)
-        .function("GetLinearHertz", &WeldJoint::GetLinearHertz)
-    ;
-
-    class_<WheelJoint, base<BasicWheelJointInterface<WheelJoint, false>>>("WheelJoint")
-        .constructor<>()
-        .function("EnableLimit", &WheelJoint::EnableLimit)
-        .function("IsLimitEnabled", &WheelJoint::IsLimitEnabled)
-        .function("SetLimits", &WheelJoint::SetLimits)
-        .function("GetLowerLimit", &WheelJoint::GetLowerLimit)
-        .function("SetMaxMotorTorque", &WheelJoint::SetMaxMotorTorque)
-        .function("GetMaxMotorTorque", &WheelJoint::GetMaxMotorTorque)
-        .function("EnableMotor", &WheelJoint::EnableMotor)
-        .function("IsMotorEnabled", &WheelJoint::IsMotorEnabled)
-        .function("SetMotorSpeed", &WheelJoint::SetMotorSpeed)
-        .function("GetMotorSpeed", &WheelJoint::GetMotorSpeed)
-        .function("GetMotorTorque", &WheelJoint::GetMotorTorque)
-        .function("EnableSpring", &WheelJoint::EnableSpring)
-        .function("IsSpringEnabled", &WheelJoint::IsSpringEnabled)
-        .function("SetSpringDampingRatio", &WheelJoint::SetSpringDampingRatio)
-        .function("GetSpringDampingRatio", &WheelJoint::GetSpringDampingRatio)
-        .function("SetSpringHertz", &WheelJoint::SetSpringHertz)
-        .function("GetSpringHertz", &WheelJoint::GetSpringHertz)
-        .function("GetUpperLimit", &WheelJoint::GetUpperLimit);
-
-    // ------------------------------------------------------------------------
-    // b2DebugDraw
-    // ------------------------------------------------------------------------
-
-    class_<b2DebugDraw>("b2DebugDraw")
-        .constructor()
-        .constructor<const b2DebugDraw&>()
-        .property("forceScale", &b2DebugDraw::forceScale)
-        .property("jointScale", &b2DebugDraw::jointScale)
-        .property("drawShapes", &b2DebugDraw::drawShapes)
-        .property("drawJoints", &b2DebugDraw::drawJoints)
-        .property("drawJointExtras", &b2DebugDraw::drawJointExtras)
-        .property("drawBounds", &b2DebugDraw::drawBounds)
-        .property("drawMass", &b2DebugDraw::drawMass)
-        .property("drawBodyNames", &b2DebugDraw::drawBodyNames)
-        .property("drawContactPoints", &b2DebugDraw::drawContactPoints)
-        .property("drawGraphColors", &b2DebugDraw::drawGraphColors)
-        .property("drawContactFeatures", &b2DebugDraw::drawContactFeatures)
-        .property("drawContactNormals", &b2DebugDraw::drawContactNormals)
-        .property("drawContactForces", &b2DebugDraw::drawContactForces)
-        .property("drawFrictionForces", &b2DebugDraw::drawFrictionForces)
-        .property("drawIslands", &b2DebugDraw::drawIslands)
-    ;
-
-    function("b2DefaultDebugDraw", &b2DefaultDebugDraw);
 }
 
 uint32_t g_seed = 12345;
@@ -1439,7 +985,6 @@ EMSCRIPTEN_BINDINGS(box2d) {
     function("b2CreateWorld", &b2CreateWorld, allow_raw_pointers());
     function("b2DestroyWorld", &b2DestroyWorld);
     function("b2World_Step", &b2World_Step);
-    function("b2World_Draw", &b2World_Draw, allow_raw_pointers());
     function("b2World_GetBodyEvents", &b2World_GetBodyEvents);
     function("b2World_GetSensorEvents", &b2World_GetSensorEvents);
     function("b2World_GetContactEvents", &b2World_GetContactEvents);

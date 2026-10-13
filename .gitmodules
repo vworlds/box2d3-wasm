@@ -2,10 +2,3 @@
 	path = box2d
 	url = https://github.com/erincatto/box2d.git
 	branch = main
-[submodule "box2cpp"]
-	path = box2cpp
-	url = https://github.com/HolyBlackCat/box2cpp.git
-	branch = master
-[submodule "enkiTS"]
-	path = enkiTS
-	url = https://github.com/dougbinks/enkiTS.git

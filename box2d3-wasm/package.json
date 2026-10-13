@@ -12,12 +12,6 @@
         "default": "./build/dist/es/entry.mjs"
       }
     },
-    "./utils/*": {
-      "import": {
-        "types": "./build/dist/es/utils/*.d.ts",
-        "default": "./build/dist/es/utils/*.mjs"
-      }
-    },
     "./fastpath": {
       "import": {
         "types": "./build/dist/es/fastpath.d.ts",

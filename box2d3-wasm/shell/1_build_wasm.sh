@@ -5,8 +5,6 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 B2D_WASM_DIR="$(realpath "$DIR/..")"
 MONOREPO_DIR="$(realpath "$B2D_WASM_DIR/..")"
 BOX2D_DIR="$(realpath "$MONOREPO_DIR/box2d")"
-B2CPP_DIR="$(realpath "$MONOREPO_DIR/box2cpp")"
-ENKITS_DIR="$(realpath "$MONOREPO_DIR/enkiTS")"
 CMAKEBUILD_DIR="$(realpath "$B2D_WASM_DIR/cmake-build-$FLAVOUR")"
 BUILD_DIR="$(realpath "$B2D_WASM_DIR/build")"
 CSRC_DIR="$(realpath "$B2D_WASM_DIR/csrc")"
@@ -19,7 +17,6 @@ NC='\033[0m' # No Color
 
 BASENAME="Box2D.$FLAVOUR"
 FLAVOUR_EMCC_OPTS=()
-FLAVOUR_LINK_OPTS=()
 case "$FLAVOUR" in
   compat)
     ;;
@@ -29,16 +26,6 @@ case "$FLAVOUR" in
       # SIMD
       -msimd128
       -msse2 # probably not necessary now that we're past emmake, unless our glue code adds more SSE
-      # threading
-      -pthread
-      -s USE_PTHREADS=1
-      -s PTHREAD_POOL_SIZE=pthreadCount
-    )
-    FLAVOUR_LINK_OPTS=(
-      ${FLAVOUR_LINK_OPTS[@]}
-      -pthread
-      -s USE_PTHREADS=1
-      -s PTHREAD_POOL_SIZE='_emscripten_num_logical_cores()'
     )
     ;;
   *)
@@ -51,7 +38,7 @@ esac
 
 # we used to use -s ENVIRONMENT=web for a slightly smaller build, until Node.js compatibility was requested in https://github.com/Birch-san/box2d-wasm/issues/8
 EMCC_OPTS=(
-  -std=c++20 # required for box2cpp
+  -std=c++20
   # -fno-rtti # not compatible with embind
   -s MODULARIZE=1
   -s EXPORT_NAME=Box2D
@@ -63,7 +50,6 @@ EMCC_OPTS=(
   -s ALLOW_MEMORY_GROWTH=1
   -s EXPORT_ES6=1
   ${FLAVOUR_EMCC_OPTS[@]}
-  ${FLAVOUR_LINK_OPTS[@]}
   )
 # Optional extra emcc flags, e.g. EXTRA_EMCC_OPTS="--profiling-funcs" for a profiling variant.
 read -r -a EXTRA_OPTS <<< "${EXTRA_EMCC_OPTS:-}"
@@ -138,15 +124,10 @@ mkdir -p "$BUILD_DIR" "$ES_DIR"
 set -x
 emcc -lembind \
 "$CSRC_DIR/glue.cpp" \
-"$CSRC_DIR/threading.cpp" \
-"$CSRC_DIR/debugDraw.cpp" \
 "$CSRC_DIR/fastpath.cpp" \
 "$CSRC_DIR/fastpath_body.gen.cpp" \
-"$ENKITS_DIR/src/TaskScheduler.cpp" \
 "$CMAKEBUILD_DIR/src/$LIBARCHIVE" \
 -I "$BOX2D_DIR/include" \
--I "$ENKITS_DIR/src" \
--I "$B2CPP_DIR/include" \
 "${EMCC_OPTS[@]}" \
 "${EXTRA_OPTS[@]}" \
 -o "$ES_FILE" \
@@ -161,18 +142,6 @@ set -x
 cp "$ES_FILE" "$ES_PRECURSOR"
 cp "$ES_TSD" "$ES_TSD_PRECURSOR"
 
-# TODO: make awk error if any of the text replacements fail to match anything, to protect us when emscripten updates.
-case "$FLAVOUR" in
-  compat)
-    # all of our text replacements are just for disabling/tuning deluxe functionality. compat flavour doesn't need any text replacements.
-    ;;
-  deluxe)
-    awk -f "$DIR/modify_emscripten_mjs.$FLAVOUR.awk" \
-    -v module_arg_template="$BUILD_DIR/module-arg.template.mjs" \
-    -v allocate_unused_worker_template="$BUILD_DIR/allocate-unused-worker.template.mjs" \
-    "$ES_PRECURSOR" > "$ES_FILE"
-    ;;
-esac
 awk -f "$DIR/modify_emscripten_dts.awk" -v template="$BUILD_DIR/Box2D.template.d.ts" "$ES_TSD_PRECURSOR" > "$ES_TSD"
 # flavour-independent fast-path helper
 cp "$B2D_WASM_DIR/src/fastpath.mjs" "$B2D_WASM_DIR/src/fastpath.d.ts" "$B2D_WASM_DIR/src/fastpath_body.gen.d.ts" "$BUILD_DIR/dist/es/"
