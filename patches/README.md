@@ -4,6 +4,13 @@
 the Makefile (idempotently: a patch that already applies in reverse is skipped). Each patch is a
 plain `git diff` against Box2D v3.2.0 (`178495b`), kept small so it rebases onto newer Box2D by hand.
 
+Why the timer patch exists: Box2D reads a clock around every timed section of every step to fill
+`b2World_GetProfile`, and in WebAssembly each read is a call out to JavaScript
+(`performance.now`). For small worlds that costs more than the physics (an empty-world step
+~3,200 ns with the timers on, ~100 ns off), and upstream has no runtime switch. Callers that do not
+read the profile, such as vecs, turn the timers off. See
+[Profile timers](../docs/fastpath.md#profile-timers).
+
 | patch | what | effect on results |
 |---|---|---|
 | `0001-runtime-switch-for-profile-timers.patch` | `b2SetProfileTimers(bool)` in `timer.c` (emscripten branch). When off, `b2GetTicks` / `b2GetMilliseconds*` return 0 without reading the clock. Exported as `b2x_SetProfileTimers`. Default on. | none: the timers only feed `world->profile` and the `B2_SNOOP_TOI_COUNTERS` statistics. Off makes `b2World_GetProfile` report zeros. (Box2D 3.2's internal scheduler also reads them for a spin timeout, but it never runs here: `b2CreateWorld` forces one worker.) |
