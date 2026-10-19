@@ -6,7 +6,8 @@
 # <tarball-or-package-dir> is the output of `npm pack` (a .tgz) or a directory with the built
 # package (package.json and dist/).
 #
-# Steps: npm ci in the vecs checkout, replace every node_modules/box2d3-wasm in it with a real
+# Steps: npm ci in the vecs checkout, replace every node_modules/@vworlds/box2d3-wasm (and any
+# leftover unscoped node_modules/box2d3-wasm) in it with a real
 # copy of the package (not a symlink), then run the vitest suites of @vworlds/vecs-physics,
 # @vworlds/vecs-phaser-server and @vworlds/vecs-phaser. vecs is not built first: its tests run
 # from source, so a checkout that already holds `dist` directories is refused.
@@ -50,8 +51,9 @@ if [[ "${SKIP_NPM_CI:-0}" != 1 ]]; then
 fi
 
 # Replace every installed copy (the hoisted one, and any nested under a workspace).
-mapfile -t TARGETS < <(find . -type d -name box2d3-wasm -path '*/node_modules/box2d3-wasm' -prune -print)
-[[ ${#TARGETS[@]} -gt 0 ]] || TARGETS=(./node_modules/box2d3-wasm)
+# vecs depends on the scoped name; the unscoped one is matched too for older vecs commits.
+mapfile -t TARGETS < <(find . -path ./.worktrees -prune -o -type d -name box2d3-wasm \( -path '*/node_modules/@vworlds/box2d3-wasm' -o -path '*/node_modules/box2d3-wasm' \) -prune -print)
+[[ ${#TARGETS[@]} -gt 0 ]] || TARGETS=(./node_modules/@vworlds/box2d3-wasm)
 for target in "${TARGETS[@]}"; do
   rm -rf "$target"
   mkdir -p "$(dirname "$target")"
