@@ -1,6 +1,6 @@
 {
   "name": "@vworlds/box2d3-wasm",
-  "version": "6.0.1",
+  "version": "7.0.0",
   "description": "Box2D v3 for the web and Node as WebAssembly: a flat C-style embind API plus a zero-allocation fast path.",
   "type": "module",
   "main": "./dist/entry.mjs",
@@ -26,7 +26,8 @@
     "build": "bash scripts/build.sh",
     "build:docker": "bash scripts/build-in-docker.sh",
     "test": "node tests/fastpath-differential.mjs deluxe && node tests/fastpath-differential.mjs compat && node tests/bindings.mjs deluxe && node tests/bindings.mjs compat && node tests/integration.mjs",
-    "test:stock": "node tests/stock-differential/run.mjs",
+    "test:reference": "node tests/reference-differential/run.mjs",
+    "bench": "node bench/engine.mjs",
     "gen": "python3 scripts/gen_fastpath.py",
     "gen:check": "python3 scripts/gen_fastpath.py --check",
     "check:bindings": "python3 scripts/check_bindings.py",
@@ -43,8 +44,5 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
-  },
-  "devDependencies": {
-    "box2d3-wasm": "5.2.0"
   }
 }

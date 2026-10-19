@@ -11,26 +11,64 @@ b2DefaultDebugDraw    # debug draw removed
 
 # --- threading / allocator / assert hooks: callbacks into the host, not supported by this package
 b2SetAllocator        # takes C function pointers (allocator); not supported
-b2SetAssertFcn        # takes a C function pointer (assert handler); not supported
-b2InternalAssertFcn   # internal assert hook called by Box2D's own B2_ASSERT, not meant for callers
+b2SetAssertCallback   # takes a C function pointer (assert handler); not supported
+b2SetLogCallback      # takes a C function pointer (log handler); not supported
+b2InternalAssert      # internal assert hook called by Box2D's own B2_ASSERT, not meant for callers
+b2World_SetWorkerCount   # this build has no threads; a count above 1 would start Box2D's internal scheduler (b2CreateWorld forces 1)
 
 # --- cannot be expressed through embind
 b2GetMillisecondsAndReset   # in/out uint64_t* argument; use b2GetTicks + b2GetMilliseconds instead
-b2ShapeDistance             # needs b2DistanceInput/b2DistanceOutput/b2SimplexCache/b2Simplex value classes and in/out arrays; not bound yet
+b2ComputeShapeDistance      # needs b2DistanceInput/b2DistanceOutput/b2SimplexCache/b2Simplex value classes and in/out arrays; not bound yet
 
 # --- needs a file system
 b2World_DumpMemoryStats   # writes box2d_memory.txt with fopen; this build has FILESYSTEM=0 and the call throws inside the runtime (verified)
 
-# --- declared but not implemented
-b2Chain_GetSurfaceMaterialCount   # declared in box2d.h, not defined in the pinned Box2D sources (box2d/src/shape.c): linking a binding fails
+# --- recording, replay and snapshots (new in Box2D 3.2): byte buffers, files and raw replay handles; not bound yet
+b2World_StartRecording      # recording: byte buffers and raw b2Recording*; not bound yet
+b2World_StopRecording       # recording: byte buffers and raw b2Recording*; not bound yet
+b2CreateRecording           # recording: byte buffers and raw b2Recording*; not bound yet
+b2CreateRecordingFromFile   # recording: needs a file system (FILESYSTEM=0)
+b2DestroyRecording          # recording: byte buffers and raw b2Recording*; not bound yet
+b2Recording_GetData         # recording: byte buffers and raw b2Recording*; not bound yet
+b2Recording_GetSize         # recording: byte buffers and raw b2Recording*; not bound yet
+b2Recording_SaveToFile      # recording: needs a file system (FILESYSTEM=0)
+b2ValidateRecording         # recording: byte buffers and raw b2Recording*; not bound yet
+b2CreateReplay              # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2DestroyReplay             # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_DrawFrameQueries   # replay: takes a b2DebugDraw; debug draw is not bound
+b2Replay_GetBodyCount       # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetBodyId          # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetDivergeFrame    # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetFrame           # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetFrameQuery      # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetFrameQueryCount # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetFrameQueryHit   # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetInfo            # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetKeyframeBudget  # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetKeyframeBytes   # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetKeyframeInterval     # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetKeyframeMinInterval  # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_GetWorldId         # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_HasDiverged        # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_IsAtEnd            # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_Restart            # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_SeekFrame          # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_SetKeyframePolicy  # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2Replay_StepFrame          # replay: raw b2Replay* and debug-draw queries; not bound yet
+b2World_GetSnapshot         # snapshot: byte buffer ownership across the boundary; not bound yet
+b2World_RestoreFromSnapshot # snapshot: byte buffer ownership across the boundary; not bound yet
+b2CreateWorldFromSnapshot   # snapshot: byte buffer ownership across the boundary; not bound yet
 
 # --- standalone dynamic AABB tree (collision.h): callback queries and raw tree pointers
-b2DynamicTree_Create                    # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_CreateProxy               # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_Destroy                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_DestroyProxy              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_EnlargeProxy              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_GetAABB                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2CreateDynamicTree                     # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DestroyDynamicTree                    # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2CreateTreeProxy                       # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DestroyTreeProxy                      # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_CastBox                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_CastRay                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_GetProxyBounds            # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_OverlapAABB               # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
+b2DynamicTree_OverlapAABBAll            # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 b2DynamicTree_GetAreaRatio              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 b2DynamicTree_GetByteCount              # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 b2DynamicTree_GetCategoryBits           # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
@@ -39,14 +77,8 @@ b2DynamicTree_GetProxyCount             # standalone broadphase tree: raw b2Dyna
 b2DynamicTree_GetRootBounds             # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 b2DynamicTree_GetUserData               # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 b2DynamicTree_MoveProxy                 # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_Query                     # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_QueryAll                  # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_RayCast                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_Rebuild                   # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 b2DynamicTree_SetCategoryBits           # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_ShapeCast                 # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 b2DynamicTree_Validate                  # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
-b2DynamicTree_ValidateNoEnlarged        # standalone broadphase tree: raw b2DynamicTree* and callback queries; not exposed
 
 # --- package helpers (bound, no C twin)
 +b2World_GetPointer        # returns worldId.index1

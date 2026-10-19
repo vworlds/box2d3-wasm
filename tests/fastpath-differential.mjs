@@ -365,8 +365,8 @@ let totals = { begin: 0, end: 0, hit: 0, sensor: 0 };
       v2("GetPosition", () => b._b2x_Body_GetPosition(i, r, out), b.b2Body_GetPosition(bodyId));
       v2("GetRotation", () => b._b2x_Body_GetRotation(i, r, out), b.b2Body_GetRotation(bodyId), ["c", "s"]);
       v2("GetLinearVelocity", () => b._b2x_Body_GetLinearVelocity(i, r, out), b.b2Body_GetLinearVelocity(bodyId));
-      v2("GetLocalCenterOfMass", () => b._b2x_Body_GetLocalCenterOfMass(i, r, out), b.b2Body_GetLocalCenterOfMass(bodyId));
-      v2("GetWorldCenterOfMass", () => b._b2x_Body_GetWorldCenterOfMass(i, r, out), b.b2Body_GetWorldCenterOfMass(bodyId));
+      v2("GetLocalCenter", () => b._b2x_Body_GetLocalCenter(i, r, out), b.b2Body_GetLocalCenter(bodyId));
+      v2("GetWorldCenter", () => b._b2x_Body_GetWorldCenter(i, r, out), b.b2Body_GetWorldCenter(bodyId));
       vec.Set(1.25, -0.5);
       v2("GetWorldPoint", () => b._b2x_Body_GetWorldPoint(i, r, 1.25, -0.5, out), b.b2Body_GetWorldPoint(bodyId, vec));
       v2("GetLocalPoint", () => b._b2x_Body_GetLocalPoint(i, r, 1.25, -0.5, out), b.b2Body_GetLocalPoint(bodyId, vec));
@@ -376,10 +376,10 @@ let totals = { begin: 0, end: 0, hit: 0, sensor: 0 };
       same("GetTransform.px", fp.f32[o], t.p.x);
       same("GetTransform.qs", fp.f32[o + 3], t.q.s);
       t.delete();
-      const aabb = b.b2Body_ComputeAABB(bodyId);
-      b._b2x_Body_ComputeAABB(i, r, out);
-      same("ComputeAABB.lowerX", fp.f32[o], aabb.lowerBound.x);
-      same("ComputeAABB.upperY", fp.f32[o + 3], aabb.upperBound.y);
+      const aabb = b.b2Body_ComputeBounds(bodyId);
+      b._b2x_Body_ComputeBounds(i, r, out);
+      same("ComputeBounds.lowerX", fp.f32[o], aabb.lowerBound.x);
+      same("ComputeBounds.upperY", fp.f32[o + 3], aabb.upperBound.y);
       aabb.delete();
       const md = b.b2Body_GetMassData(bodyId);
       b._b2x_Body_GetMassData(i, r, out);
@@ -390,7 +390,7 @@ let totals = { begin: 0, end: 0, hit: 0, sensor: 0 };
       for (const name of ["GetAngularVelocity", "GetMass", "GetRotationalInertia", "GetLinearDamping", "GetAngularDamping", "GetGravityScale", "GetSleepThreshold", "GetShapeCount", "GetJointCount"]) {
         same(name, b[`_b2x_Body_${name}`](i, r), b[`b2Body_${name}`](bodyId));
       }
-      for (const name of ["IsAwake", "IsEnabled", "IsBullet", "IsSleepEnabled", "IsValid"]) {
+      for (const name of ["IsAwake", "IsEnabled", "IsBullet", "IsSleepingEnabled", "IsValid"]) {
         same(name, b[`_b2x_Body_${name}`](i, r) !== 0, b[`b2Body_${name}`](bodyId));
       }
       same("GetType", b._b2x_Body_GetType(i, r), b.b2Body_GetType(bodyId).value);
@@ -418,7 +418,7 @@ let totals = { begin: 0, end: 0, hit: 0, sensor: 0 };
       same("GetMotion.w", fp.f32[(out + M.w) >> 2], b.b2Body_GetAngularVelocity(bodyId));
       same("GetMotion.mass", fp.f32[(out + M.mass) >> 2], b.b2Body_GetMass(bodyId));
       same("GetMotion.gravityScale", fp.f32[(out + M.gravityScale) >> 2], b.b2Body_GetGravityScale(bodyId));
-      const lc = b.b2Body_GetLocalCenterOfMass(bodyId);
+      const lc = b.b2Body_GetLocalCenter(bodyId);
       same("GetMotion.localCenterX", fp.f32[(out + M.localCenterX) >> 2], lc.x);
       lc.delete();
     }
@@ -456,7 +456,7 @@ let totals = { begin: 0, end: 0, hit: 0, sensor: 0 };
         case 5: b.b2Body_ApplyTorque(a, z, true); b._b2x_Body_ApplyTorque(i, r, z, 1); break;
         case 6: vec.Set(x, y); b.b2Body_ApplyLinearImpulseToCenter(a, vec, true); b._b2x_Body_ApplyLinearImpulseToCenter(i, r, x, y, 1); break;
         case 7: b.b2Body_ApplyAngularImpulse(a, z * 0.1, true); b._b2x_Body_ApplyAngularImpulse(i, r, z * 0.1, 1); break;
-        case 8: { vec.Set(x, y); const wp = b.b2Body_GetWorldCenterOfMass(a); vec2.Set(wp.x + w * 0.1, wp.y); wp.delete();
+        case 8: { vec.Set(x, y); const wp = b.b2Body_GetWorldCenter(a); vec2.Set(wp.x + w * 0.1, wp.y); wp.delete();
           b.b2Body_ApplyForce(a, vec, vec2, true); b._b2x_Body_ApplyForce(i, r, x, y, vec2.x, vec2.y, 1); break; }
         case 9: b.b2Body_SetLinearDamping(a, Math.abs(z) * 0.01); b._b2x_Body_SetLinearDamping(i, r, Math.abs(z) * 0.01); break;
         case 10: b.b2Body_SetGravityScale(a, 1 + z * 0.01); b._b2x_Body_SetGravityScale(i, r, 1 + z * 0.01); break;

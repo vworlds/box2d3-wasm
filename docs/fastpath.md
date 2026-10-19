@@ -165,7 +165,7 @@ and `fellAsleep` needs `u8`.
 | `span`, `contactSpans`, `sensorSpans` | `ptr` u32 + `count` i32 per event kind (`beginPtr`, `beginCount`, `endPtr`, `endCount`, `hitPtr`, `hitCount`) |
 | `moveEvent` (Box2D's `b2BodyMoveEvent`) | `userData`, `x`, `y`, `c`, `s`, `body` (index1), `bodyWorld0`, `bodyGeneration`, `fellAsleep` |
 | `contactBegin`, `contactEnd` | `shapeA`, `shapeAWorld0`, `shapeAGeneration`, `shapeB`, `shapeBWorld0`, `shapeBGeneration`, `contact` |
-| `contactHit` | the shape pair fields, `pointX`, `pointY`, `normalX`, `normalY`, `approachSpeed` |
+| `contactHit` | the shape pair fields, `pointX`, `pointY`, `normalX`, `normalY`, `approachSpeed`, `contact` |
 | `sensorBegin`, `sensorEnd` | `sensorShape`, `visitorShape` (+ `World0` / `Generation`) |
 
 `move.flags`: bit `moveFellAsleep` = the event's `fellAsleep`; `(flags >> moveTypeShift) & 3` =
@@ -217,22 +217,23 @@ All 65 `b2Body_*` functions in `box2d.h` except names, raw `void*` user data and
 | `b2x_Body_GetAngularVelocity(index1, rev)` | `b2Body_GetAngularVelocity` | number |
 | `b2x_Body_SetLinearVelocity(index1, rev, linearVelocityX, linearVelocityY)` | `b2Body_SetLinearVelocity` | void |
 | `b2x_Body_SetAngularVelocity(index1, rev, angularVelocity)` | `b2Body_SetAngularVelocity` | void |
-| `b2x_Body_SetTargetTransform(index1, rev, targetPx, targetPy, targetQc, targetQs, timeStep)` | `b2Body_SetTargetTransform` | void |
+| `b2x_Body_SetTargetTransform(index1, rev, targetPx, targetPy, targetQc, targetQs, timeStep, wake)` | `b2Body_SetTargetTransform` | void |
 | `b2x_Body_GetLocalPointVelocity(index1, rev, localPointX, localPointY, outPtr)` | `b2Body_GetLocalPointVelocity` | void — out: x, y |
 | `b2x_Body_GetWorldPointVelocity(index1, rev, worldPointX, worldPointY, outPtr)` | `b2Body_GetWorldPointVelocity` | void — out: x, y |
 | `b2x_Body_ApplyForce(index1, rev, forceX, forceY, pointX, pointY, wake)` | `b2Body_ApplyForce` | void |
 | `b2x_Body_ApplyForceToCenter(index1, rev, forceX, forceY, wake)` | `b2Body_ApplyForceToCenter` | void |
 | `b2x_Body_ApplyTorque(index1, rev, torque, wake)` | `b2Body_ApplyTorque` | void |
+| `b2x_Body_ClearForces(index1, rev)` | `b2Body_ClearForces` | void |
 | `b2x_Body_ApplyLinearImpulse(index1, rev, impulseX, impulseY, pointX, pointY, wake)` | `b2Body_ApplyLinearImpulse` | void |
 | `b2x_Body_ApplyLinearImpulseToCenter(index1, rev, impulseX, impulseY, wake)` | `b2Body_ApplyLinearImpulseToCenter` | void |
 | `b2x_Body_ApplyAngularImpulse(index1, rev, impulse, wake)` | `b2Body_ApplyAngularImpulse` | void |
 | `b2x_Body_GetMass(index1, rev)` | `b2Body_GetMass` | number |
 | `b2x_Body_GetRotationalInertia(index1, rev)` | `b2Body_GetRotationalInertia` | number |
-| `b2x_Body_GetLocalCenterOfMass(index1, rev, outPtr)` | `b2Body_GetLocalCenterOfMass` | void — out: x, y |
-| `b2x_Body_GetWorldCenterOfMass(index1, rev, outPtr)` | `b2Body_GetWorldCenterOfMass` | void — out: x, y |
+| `b2x_Body_GetLocalCenter(index1, rev, outPtr)` | `b2Body_GetLocalCenter` | void — out: x, y |
+| `b2x_Body_GetWorldCenter(index1, rev, outPtr)` | `b2Body_GetWorldCenter` | void — out: x, y |
 | `b2x_Body_SetMassData(index1, rev, massDataMass, massDataCenterX, massDataCenterY, massDataRotationalInertia)` | `b2Body_SetMassData` | void |
 | `b2x_Body_GetMassData(index1, rev, outPtr)` | `b2Body_GetMassData` | void — out: mass, centerX, centerY, rotationalInertia |
-| `b2x_Body_ApplyMassFromShapes(index1, rev)` | `b2Body_ApplyMassFromShapes` | void |
+| `b2x_Body_UpdateMassFromShapes(index1, rev)` | `b2Body_UpdateMassFromShapes` | void |
 | `b2x_Body_SetLinearDamping(index1, rev, linearDamping)` | `b2Body_SetLinearDamping` | void |
 | `b2x_Body_GetLinearDamping(index1, rev)` | `b2Body_GetLinearDamping` | number |
 | `b2x_Body_SetAngularDamping(index1, rev, angularDamping)` | `b2Body_SetAngularDamping` | void |
@@ -242,10 +243,12 @@ All 65 `b2Body_*` functions in `box2d.h` except names, raw `void*` user data and
 | `b2x_Body_IsAwake(index1, rev)` | `b2Body_IsAwake` | number — 1 or 0 |
 | `b2x_Body_SetAwake(index1, rev, awake)` | `b2Body_SetAwake` | void |
 | `b2x_Body_WakeTouching(index1, rev)` | `b2Body_WakeTouching` | void |
-| `b2x_Body_EnableSleep(index1, rev, enableSleep)` | `b2Body_EnableSleep` | void |
-| `b2x_Body_IsSleepEnabled(index1, rev)` | `b2Body_IsSleepEnabled` | number — 1 or 0 |
+| `b2x_Body_EnableSleeping(index1, rev, enableSleep)` | `b2Body_EnableSleeping` | void |
+| `b2x_Body_IsSleepingEnabled(index1, rev)` | `b2Body_IsSleepingEnabled` | number — 1 or 0 |
 | `b2x_Body_SetSleepThreshold(index1, rev, sleepThreshold)` | `b2Body_SetSleepThreshold` | void |
 | `b2x_Body_GetSleepThreshold(index1, rev)` | `b2Body_GetSleepThreshold` | number |
+| `b2x_Body_SetSafetyFactor(index1, rev, safetyFactor)` | `b2Body_SetSafetyFactor` | void |
+| `b2x_Body_GetSafetyFactor(index1, rev)` | `b2Body_GetSafetyFactor` | number |
 | `b2x_Body_IsEnabled(index1, rev)` | `b2Body_IsEnabled` | number — 1 or 0 |
 | `b2x_Body_Disable(index1, rev)` | `b2Body_Disable` | void |
 | `b2x_Body_Enable(index1, rev)` | `b2Body_Enable` | void |
@@ -253,6 +256,8 @@ All 65 `b2Body_*` functions in `box2d.h` except names, raw `void*` user data and
 | `b2x_Body_GetMotionLocks(index1, rev)` | `b2Body_GetMotionLocks` | number — bits: 1 linearX, 2 linearY, 4 angularZ |
 | `b2x_Body_SetBullet(index1, rev, flag)` | `b2Body_SetBullet` | void |
 | `b2x_Body_IsBullet(index1, rev)` | `b2Body_IsBullet` | number — 1 or 0 |
+| `b2x_Body_EnableContactRecycling(index1, rev, flag)` | `b2Body_EnableContactRecycling` | void |
+| `b2x_Body_IsContactRecyclingEnabled(index1, rev)` | `b2Body_IsContactRecyclingEnabled` | number — 1 or 0 |
 | `b2x_Body_EnableContactEvents(index1, rev, flag)` | `b2Body_EnableContactEvents` | void |
 | `b2x_Body_EnableHitEvents(index1, rev, flag)` | `b2Body_EnableHitEvents` | void |
 | `b2x_Body_GetWorld(index1, rev)` | `b2Body_GetWorld` | number — packed world id |
@@ -261,7 +266,10 @@ All 65 `b2Body_*` functions in `box2d.h` except names, raw `void*` user data and
 | `b2x_Body_GetJointCount(index1, rev)` | `b2Body_GetJointCount` | number |
 | `b2x_Body_GetJoints(index1, rev, jointArrayPtr, capacity)` | `b2Body_GetJoints` | number — writes up to capacity (index1, rev) pairs to jointArrayPtr; returns the count |
 | `b2x_Body_GetContactCapacity(index1, rev)` | `b2Body_GetContactCapacity` | number |
-| `b2x_Body_ComputeAABB(index1, rev, outPtr)` | `b2Body_ComputeAABB` | void — out: lowerX, lowerY, upperX, upperY |
+| `b2x_Body_ComputeBounds(index1, rev, outPtr)` | `b2Body_ComputeBounds` | void — out: lowerX, lowerY, upperX, upperY |
+| `b2x_Body_GetMinExtent(index1, rev)` | `b2Body_GetMinExtent` | number |
+| `b2x_Body_GetMaxExtent(index1, rev)` | `b2Body_GetMaxExtent` | number |
+| `b2x_Body_GetMaxExtentFromOrigin(index1, rev)` | `b2Body_GetMaxExtentFromOrigin` | number |
 
 Hand-written composites: one crossing for an exact call sequence.
 
@@ -270,7 +278,7 @@ Hand-written composites: one crossing for an exact call sequence.
 | `_b2x_Body_SetPosition(index1, rev, x, y)` | `b2Body_SetTransform(id, {x, y}, b2Body_GetRotation(id))` |
 | `_b2x_Body_SetAngle(index1, rev, angle)` | `b2Body_SetTransform(id, b2Body_GetPosition(id), b2MakeRot(angle))` |
 | `_b2x_Body_GetPose(index1, rev, outPtr)` | `b2Body_GetPosition`, `b2Body_GetRotation`, `b2Rot_GetAngle` → `layout.pose` |
-| `_b2x_Body_GetMotion(index1, rev, outPtr)` | `b2Body_IsAwake`, `GetLinearVelocity`, `GetAngularVelocity`, `GetLinearDamping`, `GetAngularDamping`, `GetLocalCenterOfMass`, `GetMass`, `GetGravityScale` → `layout.motion` |
+| `_b2x_Body_GetMotion(index1, rev, outPtr)` | `b2Body_IsAwake`, `GetLinearVelocity`, `GetAngularVelocity`, `GetLinearDamping`, `GetAngularDamping`, `GetLocalCenter`, `GetMass`, `GetGravityScale` → `layout.motion` |
 
 ## Integer user data
 
@@ -300,7 +308,7 @@ declarations also lists the raw exports, with positional names.
 
 ## Versioning
 
-`layout.constants.version` (`B2X_VERSION`, currently 1) changes whenever an exported signature
+`layout.constants.version` (`B2X_VERSION`, currently 2) changes whenever an exported signature
 or record layout changes; `createFastPath` checks it against `_b2x_GetVersion()`. Both builds
 (deluxe: SIMD; compat: no SIMD) carry the same fast path.
 
@@ -310,7 +318,7 @@ or record layout changes; `createFastPath` checks it against `_b2x_GetVersion()`
 npm run build:docker                  # or: npm run build, with emsdk 4.0.18 and TypeScript 5 on PATH
 npm test                              # differential test (deluxe, compat) + integration test, on dist/
 npm run gen:check                     # generated code is current
-npm run test:stock                    # bit-identical to box2d3-wasm 5.2.0 (embind and fast path)
+npm run test:reference                # bit-identical to the recorded reference for the pinned Box2D (embind and fast path)
 npx -p typescript@5.9 tsc --noEmit --strict --target es2022 --module nodenext \
   --moduleResolution nodenext docs/examples/fastpath-example.ts   # the example typechecks
 ```

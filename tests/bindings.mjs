@@ -94,7 +94,7 @@ const worldId = makeWorld(0);
   b.b2Body_SetName(bodyId, "player");
   eq(b.b2Body_GetName(bodyId), "player", "body name round trip");
   b.b2Body_SetName(bodyId, "x".repeat(100));
-  eq(b.b2Body_GetName(bodyId).length, 31, "names are truncated to B2_NAME_LENGTH - 1");
+  eq(b.b2Body_GetName(bodyId).length, 10, "names are truncated to B2_NAME_LENGTH (10 in Box2D 3.2)");
   b.b2Body_SetName(bodyId, "");
   eq(b.b2Body_GetName(bodyId), "", "empty string clears the name");
 }
@@ -138,7 +138,11 @@ const worldId = makeWorld(0);
   const cw = makeWorld(0);
   const ground = makeBody(cw, staticBody, 0, 0);
   const cd = own(b.b2DefaultChainDef());
-  cd.SetPoints([{ x: -4, y: 0 }, { x: -2, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }]);
+  // Box2D 3.2: every point is a segment end; an open chain sets its ghost points separately
+  cd.SetPoints([{ x: -2, y: 0 }, { x: 2, y: 0 }]);
+  cd.ghost1.Set(-4, 0);
+  cd.ghost2.Set(4, 0);
+  eq(cd.pointCount, 2, "b2ChainDef.pointCount follows SetPoints");
   cd.SetMaterials([{ friction: 0.2, restitution: 0.1 }]);
   const chainId = b.b2CreateChain(ground, cd);
   eq(b.b2Chain_GetWorld(chainId), cw, "b2Chain_GetWorld");
@@ -241,11 +245,11 @@ const worldId = makeWorld(0);
   eq(b.b2IsValidVec2(V(1, 2)), true, "b2IsValidVec2");
   eq(b.b2IsValidVec2(V(NaN, 2)), false, "b2IsValidVec2(NaN)");
   const q = own(b.b2MakeRot(0.3));
-  eq(b.b2IsValidRotation(q), true, "b2IsValidRotation");
+  eq(b.b2IsValidRot(q), true, "b2IsValidRot");
   const badQ = own(new b.b2Rot());
   badQ.c = 3;
   badQ.s = 3;
-  eq(b.b2IsValidRotation(badQ), false, "b2IsValidRotation(not normalised)");
+  eq(b.b2IsValidRot(badQ), false, "b2IsValidRot(not normalised)");
   const xf = own(new b.b2Transform());
   xf.q.c = 1;
   xf.q.s = 0;
@@ -304,26 +308,26 @@ const worldId = makeWorld(0);
   ray.translation.y = 0;
   ray.maxFraction = 1;
 
-  const rc = own(b.b2RayCastCircle(circle, ray));
-  eq(rc.hit, true, "b2RayCastCircle hits");
-  near(rc.point.x, -1, "b2RayCastCircle point");
-  near(rc.fraction, 0.4, "b2RayCastCircle fraction");
-  const rcap = own(b.b2RayCastCapsule(capsule, ray));
-  eq(rcap.hit, true, "b2RayCastCapsule hits");
-  near(rcap.point.x, -1.5, "b2RayCastCapsule point");
-  const rpoly = own(b.b2RayCastPolygon(poly, ray));
-  eq(rpoly.hit, true, "b2RayCastPolygon hits");
-  near(rpoly.point.x, -1, "b2RayCastPolygon point");
+  const rc = own(b.b2CastRayCircle(circle, ray));
+  eq(rc.hit, true, "b2CastRayCircle hits");
+  near(rc.point.x, -1, "b2CastRayCircle point");
+  near(rc.fraction, 0.4, "b2CastRayCircle fraction");
+  const rcap = own(b.b2CastRayCapsule(capsule, ray));
+  eq(rcap.hit, true, "b2CastRayCapsule hits");
+  near(rcap.point.x, -1.5, "b2CastRayCapsule point");
+  const rpoly = own(b.b2CastRayPolygon(poly, ray));
+  eq(rpoly.hit, true, "b2CastRayPolygon hits");
+  near(rpoly.point.x, -1, "b2CastRayPolygon point");
   const vray = own(new b.b2RayCastInput());
   vray.origin.x = 0;
   vray.origin.y = 3;
   vray.translation.x = 0;
   vray.translation.y = -6;
   vray.maxFraction = 1;
-  const rseg = own(b.b2RayCastSegment(segment, vray, false));
-  eq(rseg.hit, true, "b2RayCastSegment hits");
-  near(rseg.fraction, 0.5, "b2RayCastSegment fraction");
-  const rsegOne = own(b.b2RayCastSegment(segment, vray, true));
+  const rseg = own(b.b2CastRaySegment(segment, vray, false));
+  eq(rseg.hit, true, "b2CastRaySegment hits");
+  near(rseg.fraction, 0.5, "b2CastRaySegment fraction");
+  const rsegOne = own(b.b2CastRaySegment(segment, vray, true));
   eq(rsegOne.hit, false, "one-sided segment is not hit from its back side");
   eq(b.b2ValidateHull(own(b.b2ComputeHull([V(0, 0), V(1, 0), V(0, 1)]))), true, "b2ValidateHull");
 
@@ -337,9 +341,9 @@ const worldId = makeWorld(0);
   sci.maxFraction = 1;
   sci.canEncroach = false;
   for (const [name, shape] of [["Circle", circle], ["Capsule", capsule], ["Segment", segment], ["Polygon", poly]]) {
-    const out = own(b[`b2ShapeCast${name}`](shape, sci));
-    eq(out.hit, true, `b2ShapeCast${name} hits`);
-    ok(out.fraction > 0 && out.fraction < 1, `b2ShapeCast${name} fraction in (0,1)`);
+    const out = own(b[`b2CastShape${name}`](shape, sci));
+    eq(out.hit, true, `b2CastShape${name} hits`);
+    ok(out.fraction > 0 && out.fraction < 1, `b2CastShape${name} fraction in (0,1)`);
   }
   // pair shape cast: A fixed circle at the origin, B a point proxy moving toward it
   const pair = own(new b.b2ShapeCastPairInput());
@@ -349,14 +353,14 @@ const worldId = makeWorld(0);
   pair.proxyB.count = 1;
   pair.proxyB.setPoint(0, V(0, 0));
   pair.proxyB.radius = 0;
-  pair.transformA.q.c = 1;
-  pair.transformB.p.x = -5;
-  pair.transformB.q.c = 1;
+  // Box2D 3.2: one transform, B relative to A
+  pair.transform.p.x = -5;
+  pair.transform.q.c = 1;
   pair.translationB.x = 10;
   pair.maxFraction = 1;
-  const pc = own(b.b2ShapeCast(pair));
-  eq(pc.hit, true, "b2ShapeCast hits");
-  near(pc.fraction, 0.4, "b2ShapeCast fraction", 1e-3);
+  const pc = own(b.b2CastShape(pair));
+  eq(pc.hit, true, "b2CastShape hits");
+  near(pc.fraction, 0.4, "b2CastShape fraction", 1e-3);
 
   // time of impact
   const toi = own(new b.b2TOIInput());
@@ -373,38 +377,38 @@ const worldId = makeWorld(0);
   toi.sweepB.q1.c = 1;
   toi.sweepB.q2.c = 1;
   toi.maxFraction = 1;
-  const out = own(b.b2TimeOfImpact(toi));
-  eq(out.state, b.b2TOIState.b2_toiStateHit, "b2TimeOfImpact hit state");
-  near(out.fraction, 4 / 12, "b2TimeOfImpact fraction", 1e-2);
+  const out = own(b.b2ComputeTimeOfImpact(toi));
+  eq(out.state, b.b2TOIState.b2_toiStateHit, "b2ComputeTimeOfImpact hit state");
+  near(out.fraction, 4 / 12, "b2ComputeTimeOfImpact fraction", 1e-2);
 
   const sweepXf = own(b.b2GetSweepTransform(toi.sweepB, 0.5));
   near(sweepXf.p.x, 0, "b2GetSweepTransform midpoint");
   const sweepEnd = own(b.b2GetSweepTransform(toi.sweepB, 1));
   near(sweepEnd.p.x, 6, "b2GetSweepTransform end");
 
-  const sd = own(b.b2SegmentDistance(V(0, 0), V(1, 0), V(0, 2), V(1, 2)));
-  near(sd.distanceSquared, 4, "b2SegmentDistance squared distance");
-  near(sd.closest1.y, 0, "b2SegmentDistance closest1");
-  near(sd.closest2.y, 2, "b2SegmentDistance closest2");
+  const sd = own(b.b2ComputeSegmentDistance(V(0, 0), V(1, 0), V(0, 2), V(1, 2)));
+  near(sd.distanceSquared, 4, "b2ComputeSegmentDistance squared distance");
+  near(sd.closest1.y, 0, "b2ComputeSegmentDistance closest1");
+  near(sd.closest2.y, 2, "b2ComputeSegmentDistance closest2");
 
   // collide: overlapping shapes make a manifold with points, separated ones do not
   const circleB = own(new b.b2Circle());
   circleB.radius = 1;
-  const m1 = own(b.b2CollideCircles(circle, ident, circleB, moved));
+  const m1 = own(b.b2CollideCircles(circle, circleB, moved));
   eq(m1.pointCount, 1, "b2CollideCircles overlap");
   const far = own(new b.b2Transform());
   far.p.x = 10;
   far.q.c = 1;
-  const m0 = own(b.b2CollideCircles(circle, ident, circleB, far));
+  const m0 = own(b.b2CollideCircles(circle, circleB, far));
   eq(m0.pointCount, 0, "b2CollideCircles apart");
-  eq(own(b.b2CollideCapsuleAndCircle(capsule, ident, circleB, moved)).pointCount > 0, true, "b2CollideCapsuleAndCircle");
-  eq(own(b.b2CollideSegmentAndCircle(segment, ident, circleB, moved)).pointCount > 0, true, "b2CollideSegmentAndCircle");
-  eq(own(b.b2CollidePolygonAndCircle(poly, ident, circleB, moved)).pointCount > 0, true, "b2CollidePolygonAndCircle");
-  eq(own(b.b2CollideCapsules(capsule, ident, capsule, moved)).pointCount > 0, true, "b2CollideCapsules");
-  eq(own(b.b2CollideSegmentAndCapsule(segment, ident, capsule, moved)).pointCount > 0, true, "b2CollideSegmentAndCapsule");
-  eq(own(b.b2CollidePolygonAndCapsule(poly, ident, capsule, moved)).pointCount > 0, true, "b2CollidePolygonAndCapsule");
-  eq(own(b.b2CollidePolygons(poly, ident, poly, moved)).pointCount, 2, "b2CollidePolygons");
-  eq(own(b.b2CollideSegmentAndPolygon(segment, ident, poly, moved)).pointCount > 0, true, "b2CollideSegmentAndPolygon");
+  eq(own(b.b2CollideCapsuleAndCircle(capsule, circleB, moved)).pointCount > 0, true, "b2CollideCapsuleAndCircle");
+  eq(own(b.b2CollideSegmentAndCircle(segment, circleB, moved)).pointCount > 0, true, "b2CollideSegmentAndCircle");
+  eq(own(b.b2CollidePolygonAndCircle(poly, circleB, moved)).pointCount > 0, true, "b2CollidePolygonAndCircle");
+  eq(own(b.b2CollideCapsules(capsule, capsule, moved)).pointCount > 0, true, "b2CollideCapsules");
+  eq(own(b.b2CollideSegmentAndCapsule(segment, capsule, moved)).pointCount > 0, true, "b2CollideSegmentAndCapsule");
+  eq(own(b.b2CollidePolygonAndCapsule(poly, capsule, moved)).pointCount > 0, true, "b2CollidePolygonAndCapsule");
+  eq(own(b.b2CollidePolygons(poly, poly, moved)).pointCount, 2, "b2CollidePolygons");
+  eq(own(b.b2CollideSegmentAndPolygon(segment, poly, moved)).pointCount > 0, true, "b2CollideSegmentAndPolygon");
   const chainSeg = own(new b.b2ChainSegment());
   chainSeg.segment.point1.x = -2;
   chainSeg.segment.point2.x = 2;
@@ -413,9 +417,100 @@ const worldId = makeWorld(0);
   const lowCircle = own(new b.b2Transform());
   lowCircle.p.y = -0.5; // chain segments are one-sided: they collide on their right side
   lowCircle.q.c = 1;
-  eq(own(b.b2CollideChainSegmentAndCircle(chainSeg, ident, circleB, lowCircle)).pointCount > 0, true, "b2CollideChainSegmentAndCircle");
-  eq(own(b.b2CollideChainSegmentAndCapsule(chainSeg, ident, capsule, lowCircle, own(new b.b2SimplexCache()))).pointCount > 0, true, "b2CollideChainSegmentAndCapsule");
-  eq(own(b.b2CollideChainSegmentAndPolygon(chainSeg, ident, poly, lowCircle, own(new b.b2SimplexCache()))).pointCount > 0, true, "b2CollideChainSegmentAndPolygon");
+  eq(own(b.b2CollideChainSegmentAndCircle(chainSeg, circleB, lowCircle)).pointCount > 0, true, "b2CollideChainSegmentAndCircle");
+  eq(own(b.b2CollideChainSegmentAndCapsule(chainSeg, capsule, lowCircle, own(new b.b2SimplexCache()))).pointCount > 0, true, "b2CollideChainSegmentAndCapsule");
+  eq(own(b.b2CollideChainSegmentAndPolygon(chainSeg, poly, lowCircle, own(new b.b2SimplexCache()))).pointCount > 0, true, "b2CollideChainSegmentAndPolygon");
+}
+
+// ---- Box2D 3.2 additions ---------------------------------------------------------------------------
+{
+  // single-threaded build: a requested worker count above 1 is forced to 1
+  const def = own(b.b2DefaultWorldDef());
+  def.workerCount = 4;
+  const tw = b.b2CreateWorld(def);
+  eq(b.b2World_GetWorkerCount(tw), 1, "b2CreateWorld forces workerCount to 1");
+  b.b2World_Step(tw, 1 / 60, 4);
+  b.b2DestroyWorld(tw);
+
+  // contact tuning read-back, restitution settings, state hash
+  const qw = makeWorld(-10);
+  b.b2World_SetContactTuning(qw, 25, 5, 2);
+  const tuning = b.b2World_GetContactTuning(qw);
+  near(tuning.hertz, 25, "b2World_GetContactTuning hertz");
+  near(tuning.dampingRatio, 5, "b2World_GetContactTuning dampingRatio");
+  near(tuning.pushSpeed, 2, "b2World_GetContactTuning pushSpeed");
+  b.b2World_SetRestitutionIterations(qw, 3);
+  eq(b.b2World_GetRestitutionIterations(qw), 3, "restitution iterations round trip");
+  eq(typeof b.b2World_GetStateHash(qw), "bigint", "b2World_GetStateHash is a BigInt");
+  eq(b.b2IsDoublePrecision(), false, "single-precision build");
+
+  // world queries take an origin; the AABB is relative to it, results are in world space
+  const target = makeBody(qw, staticBody, 100, 50);
+  const targetShape = addBox(target);
+  const filter = own(b.b2DefaultQueryFilter());
+  const hits = [];
+  const box = own(new b.b2AABB());
+  box.lowerBound.Set(-1, -1);
+  box.upperBound.Set(1, 1);
+  b.b2World_OverlapAABB(qw, V(100, 50), box, filter, (r) => (hits.push(r.shapeId), true));
+  eq(hits.length, 1, "b2World_OverlapAABB finds the box around a non-zero origin");
+  eq(hits[0], targetShape, "b2World_OverlapAABB returns the shape id");
+  hits.length = 0;
+  b.b2World_OverlapAABB(qw, V(0, 0), box, filter, (r) => (hits.push(r.shapeId), true));
+  eq(hits.length, 0, "the same AABB around the zero origin misses");
+  const ray = b.b2World_CastRayClosest(qw, V(90, 50), V(20, 0), filter);
+  ok(ray.hit, "b2World_CastRayClosest hits");
+  near(ray.point.x, 99.5, "b2World_CastRayClosest point is in world space", 1e-4);
+
+  // hit events carry the contact id
+  const ground = makeBody(qw, staticBody, 0, 0);
+  const gsd = own(b.b2DefaultShapeDef());
+  gsd.enableHitEvents = true;
+  b.b2CreatePolygonShape(ground, gsd, own(b.b2MakeOffsetBox(10, 0.5, V(0, -0.5), b.b2Rot_identity)));
+  const ball = makeBody(qw, dynamic, 0, 3);
+  const bsd = own(b.b2DefaultShapeDef());
+  bsd.enableHitEvents = true;
+  const ballCircle = own(new b.b2Circle());
+  ballCircle.radius = 0.5;
+  b.b2CreateCircleShape(ball, bsd, ballCircle);
+  b.b2Body_SetLinearVelocity(ball, V(0, -20));
+  let hit = null;
+  for (let i = 0; i < 30 && !hit; i++) {
+    b.b2World_Step(qw, 1 / 60, 4);
+    const ev = b.b2World_GetContactEvents(qw);
+    if (ev.hitCount > 0) hit = ev.GetHitEvent(0);
+  }
+  ok(hit, "a fast ball makes a hit event");
+  ok(hit.contactId.index1 > 0, "b2ContactHitEvent.contactId is set");
+  b.b2DestroyWorld(qw);
+}
+{
+  // pre-solve: the callback sees the manifold and pointCount = 0 disables the contact
+  const pw = makeWorld(-10);
+  const ground = makeBody(pw, staticBody, 0, 0);
+  const gsd = own(b.b2DefaultShapeDef());
+  gsd.enablePreSolveEvents = true;
+  b.b2CreatePolygonShape(ground, gsd, own(b.b2MakeOffsetBox(10, 0.5, V(0, -0.5), b.b2Rot_identity)));
+  const crate = makeBody(pw, dynamic, 0, 1);
+  addBox(crate);
+  let calls = 0;
+  let continuousArgs = 0;
+  const handle = b.b2World_SetPreSolveCallback(
+    pw,
+    (shapeA, shapeB, manifold) => {
+      calls++;
+      if (calls === 1) ok(manifold.pointCount > 0, "pre-solve manifold has points");
+      manifold.pointCount = 0;
+    },
+    (shapeA, shapeB, point, normal) => (continuousArgs = 4, true),
+  );
+  for (let i = 0; i < 120; i++) b.b2World_Step(pw, 1 / 60, 4);
+  ok(calls > 0, "pre-solve callback runs");
+  ok(b.b2Body_GetPosition(crate).y < -5, "disabled contacts let the crate fall through");
+  b.b2World_SetPreSolveCallback(pw, null, null);
+  b.b2World_DeleteCallback(handle);
+  eq(continuousArgs === 0 || continuousArgs === 4, true, "pre-continuous callback signature");
+  b.b2DestroyWorld(pw);
 }
 
 for (const o of owned) o.delete();

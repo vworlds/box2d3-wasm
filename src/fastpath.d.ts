@@ -116,7 +116,7 @@ export interface FastPathLayout {
   contactBegin: StructLayout<ShapePairFields | "contact">;
   contactEnd: StructLayout<ShapePairFields | "contact">;
   contactHit: StructLayout<
-    ShapePairFields | "pointX" | "pointY" | "normalX" | "normalY" | "approachSpeed"
+    ShapePairFields | "pointX" | "pointY" | "normalX" | "normalY" | "approachSpeed" | "contact"
   >;
   sensorBegin: StructLayout<SensorPairFields>;
   sensorEnd: StructLayout<SensorPairFields>;

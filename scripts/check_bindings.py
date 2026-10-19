@@ -73,7 +73,7 @@ def strip_preprocessor(text):
 
 
 API_RE = re.compile(r"\bB2_API\b([^;{}]*?)\b([A-Za-z_]\w*)\s*\(")
-INLINE_RE = re.compile(r"\bB2_INLINE\b([^;{}(]*?)\b([A-Za-z_]\w*)\s*\(")
+INLINE_RE = re.compile(r"\bB2_(?:FORCE_)?INLINE\b([^;{}(]*?)\b([A-Za-z_]\w*)\s*\(")
 
 
 def parse_headers():

@@ -32,7 +32,7 @@ B2X_API void b2x_Body_SetType( int32_t index1, int32_t rev, int32_t type )
 
 B2X_API void b2x_Body_GetPosition( int32_t index1, int32_t rev, float* out )
 {
-	b2Vec2 v = b2Body_GetPosition( B2xBody( index1, rev ) );
+	b2Pos v = b2Body_GetPosition( B2xBody( index1, rev ) );
 	out[0] = v.x;
 	out[1] = v.y;
 }
@@ -46,7 +46,7 @@ B2X_API void b2x_Body_GetRotation( int32_t index1, int32_t rev, float* out )
 
 B2X_API void b2x_Body_GetTransform( int32_t index1, int32_t rev, float* out )
 {
-	b2Transform t = b2Body_GetTransform( B2xBody( index1, rev ) );
+	b2WorldTransform t = b2Body_GetTransform( B2xBody( index1, rev ) );
 	out[0] = t.p.x;
 	out[1] = t.p.y;
 	out[2] = t.q.c;
@@ -55,19 +55,19 @@ B2X_API void b2x_Body_GetTransform( int32_t index1, int32_t rev, float* out )
 
 B2X_API void b2x_Body_SetTransform( int32_t index1, int32_t rev, float positionX, float positionY, float rotationC, float rotationS )
 {
-	b2Body_SetTransform( B2xBody( index1, rev ), b2Vec2{ positionX, positionY }, b2Rot{ rotationC, rotationS } );
+	b2Body_SetTransform( B2xBody( index1, rev ), b2Pos{ positionX, positionY }, b2Rot{ rotationC, rotationS } );
 }
 
 B2X_API void b2x_Body_GetLocalPoint( int32_t index1, int32_t rev, float worldPointX, float worldPointY, float* out )
 {
-	b2Vec2 v = b2Body_GetLocalPoint( B2xBody( index1, rev ), b2Vec2{ worldPointX, worldPointY } );
+	b2Vec2 v = b2Body_GetLocalPoint( B2xBody( index1, rev ), b2Pos{ worldPointX, worldPointY } );
 	out[0] = v.x;
 	out[1] = v.y;
 }
 
 B2X_API void b2x_Body_GetWorldPoint( int32_t index1, int32_t rev, float localPointX, float localPointY, float* out )
 {
-	b2Vec2 v = b2Body_GetWorldPoint( B2xBody( index1, rev ), b2Vec2{ localPointX, localPointY } );
+	b2Pos v = b2Body_GetWorldPoint( B2xBody( index1, rev ), b2Vec2{ localPointX, localPointY } );
 	out[0] = v.x;
 	out[1] = v.y;
 }
@@ -108,9 +108,9 @@ B2X_API void b2x_Body_SetAngularVelocity( int32_t index1, int32_t rev, float ang
 	b2Body_SetAngularVelocity( B2xBody( index1, rev ), angularVelocity );
 }
 
-B2X_API void b2x_Body_SetTargetTransform( int32_t index1, int32_t rev, float targetPx, float targetPy, float targetQc, float targetQs, float timeStep )
+B2X_API void b2x_Body_SetTargetTransform( int32_t index1, int32_t rev, float targetPx, float targetPy, float targetQc, float targetQs, float timeStep, int32_t wake )
 {
-	b2Body_SetTargetTransform( B2xBody( index1, rev ), b2Transform{ b2Vec2{ targetPx, targetPy }, b2Rot{ targetQc, targetQs } }, timeStep );
+	b2Body_SetTargetTransform( B2xBody( index1, rev ), b2WorldTransform{ b2Pos{ targetPx, targetPy }, b2Rot{ targetQc, targetQs } }, timeStep, (wake != 0) );
 }
 
 B2X_API void b2x_Body_GetLocalPointVelocity( int32_t index1, int32_t rev, float localPointX, float localPointY, float* out )
@@ -122,14 +122,14 @@ B2X_API void b2x_Body_GetLocalPointVelocity( int32_t index1, int32_t rev, float 
 
 B2X_API void b2x_Body_GetWorldPointVelocity( int32_t index1, int32_t rev, float worldPointX, float worldPointY, float* out )
 {
-	b2Vec2 v = b2Body_GetWorldPointVelocity( B2xBody( index1, rev ), b2Vec2{ worldPointX, worldPointY } );
+	b2Vec2 v = b2Body_GetWorldPointVelocity( B2xBody( index1, rev ), b2Pos{ worldPointX, worldPointY } );
 	out[0] = v.x;
 	out[1] = v.y;
 }
 
 B2X_API void b2x_Body_ApplyForce( int32_t index1, int32_t rev, float forceX, float forceY, float pointX, float pointY, int32_t wake )
 {
-	b2Body_ApplyForce( B2xBody( index1, rev ), b2Vec2{ forceX, forceY }, b2Vec2{ pointX, pointY }, (wake != 0) );
+	b2Body_ApplyForce( B2xBody( index1, rev ), b2Vec2{ forceX, forceY }, b2Pos{ pointX, pointY }, (wake != 0) );
 }
 
 B2X_API void b2x_Body_ApplyForceToCenter( int32_t index1, int32_t rev, float forceX, float forceY, int32_t wake )
@@ -142,9 +142,14 @@ B2X_API void b2x_Body_ApplyTorque( int32_t index1, int32_t rev, float torque, in
 	b2Body_ApplyTorque( B2xBody( index1, rev ), torque, (wake != 0) );
 }
 
+B2X_API void b2x_Body_ClearForces( int32_t index1, int32_t rev )
+{
+	b2Body_ClearForces( B2xBody( index1, rev ) );
+}
+
 B2X_API void b2x_Body_ApplyLinearImpulse( int32_t index1, int32_t rev, float impulseX, float impulseY, float pointX, float pointY, int32_t wake )
 {
-	b2Body_ApplyLinearImpulse( B2xBody( index1, rev ), b2Vec2{ impulseX, impulseY }, b2Vec2{ pointX, pointY }, (wake != 0) );
+	b2Body_ApplyLinearImpulse( B2xBody( index1, rev ), b2Vec2{ impulseX, impulseY }, b2Pos{ pointX, pointY }, (wake != 0) );
 }
 
 B2X_API void b2x_Body_ApplyLinearImpulseToCenter( int32_t index1, int32_t rev, float impulseX, float impulseY, int32_t wake )
@@ -167,16 +172,16 @@ B2X_API float b2x_Body_GetRotationalInertia( int32_t index1, int32_t rev )
 	return b2Body_GetRotationalInertia( B2xBody( index1, rev ) );
 }
 
-B2X_API void b2x_Body_GetLocalCenterOfMass( int32_t index1, int32_t rev, float* out )
+B2X_API void b2x_Body_GetLocalCenter( int32_t index1, int32_t rev, float* out )
 {
-	b2Vec2 v = b2Body_GetLocalCenterOfMass( B2xBody( index1, rev ) );
+	b2Vec2 v = b2Body_GetLocalCenter( B2xBody( index1, rev ) );
 	out[0] = v.x;
 	out[1] = v.y;
 }
 
-B2X_API void b2x_Body_GetWorldCenterOfMass( int32_t index1, int32_t rev, float* out )
+B2X_API void b2x_Body_GetWorldCenter( int32_t index1, int32_t rev, float* out )
 {
-	b2Vec2 v = b2Body_GetWorldCenterOfMass( B2xBody( index1, rev ) );
+	b2Pos v = b2Body_GetWorldCenter( B2xBody( index1, rev ) );
 	out[0] = v.x;
 	out[1] = v.y;
 }
@@ -195,9 +200,9 @@ B2X_API void b2x_Body_GetMassData( int32_t index1, int32_t rev, float* out )
 	out[3] = m.rotationalInertia;
 }
 
-B2X_API void b2x_Body_ApplyMassFromShapes( int32_t index1, int32_t rev )
+B2X_API void b2x_Body_UpdateMassFromShapes( int32_t index1, int32_t rev )
 {
-	b2Body_ApplyMassFromShapes( B2xBody( index1, rev ) );
+	b2Body_UpdateMassFromShapes( B2xBody( index1, rev ) );
 }
 
 B2X_API void b2x_Body_SetLinearDamping( int32_t index1, int32_t rev, float linearDamping )
@@ -245,14 +250,14 @@ B2X_API void b2x_Body_WakeTouching( int32_t index1, int32_t rev )
 	b2Body_WakeTouching( B2xBody( index1, rev ) );
 }
 
-B2X_API void b2x_Body_EnableSleep( int32_t index1, int32_t rev, int32_t enableSleep )
+B2X_API void b2x_Body_EnableSleeping( int32_t index1, int32_t rev, int32_t enableSleep )
 {
-	b2Body_EnableSleep( B2xBody( index1, rev ), (enableSleep != 0) );
+	b2Body_EnableSleeping( B2xBody( index1, rev ), (enableSleep != 0) );
 }
 
-B2X_API int32_t b2x_Body_IsSleepEnabled( int32_t index1, int32_t rev )
+B2X_API int32_t b2x_Body_IsSleepingEnabled( int32_t index1, int32_t rev )
 {
-	return b2Body_IsSleepEnabled( B2xBody( index1, rev ) ) ? 1 : 0;
+	return b2Body_IsSleepingEnabled( B2xBody( index1, rev ) ) ? 1 : 0;
 }
 
 B2X_API void b2x_Body_SetSleepThreshold( int32_t index1, int32_t rev, float sleepThreshold )
@@ -263,6 +268,16 @@ B2X_API void b2x_Body_SetSleepThreshold( int32_t index1, int32_t rev, float slee
 B2X_API float b2x_Body_GetSleepThreshold( int32_t index1, int32_t rev )
 {
 	return b2Body_GetSleepThreshold( B2xBody( index1, rev ) );
+}
+
+B2X_API void b2x_Body_SetSafetyFactor( int32_t index1, int32_t rev, float safetyFactor )
+{
+	b2Body_SetSafetyFactor( B2xBody( index1, rev ), safetyFactor );
+}
+
+B2X_API float b2x_Body_GetSafetyFactor( int32_t index1, int32_t rev )
+{
+	return b2Body_GetSafetyFactor( B2xBody( index1, rev ) );
 }
 
 B2X_API int32_t b2x_Body_IsEnabled( int32_t index1, int32_t rev )
@@ -299,6 +314,16 @@ B2X_API void b2x_Body_SetBullet( int32_t index1, int32_t rev, int32_t flag )
 B2X_API int32_t b2x_Body_IsBullet( int32_t index1, int32_t rev )
 {
 	return b2Body_IsBullet( B2xBody( index1, rev ) ) ? 1 : 0;
+}
+
+B2X_API void b2x_Body_EnableContactRecycling( int32_t index1, int32_t rev, int32_t flag )
+{
+	b2Body_EnableContactRecycling( B2xBody( index1, rev ), (flag != 0) );
+}
+
+B2X_API int32_t b2x_Body_IsContactRecyclingEnabled( int32_t index1, int32_t rev )
+{
+	return b2Body_IsContactRecyclingEnabled( B2xBody( index1, rev ) ) ? 1 : 0;
 }
 
 B2X_API void b2x_Body_EnableContactEvents( int32_t index1, int32_t rev, int32_t flag )
@@ -346,12 +371,27 @@ B2X_API int32_t b2x_Body_GetContactCapacity( int32_t index1, int32_t rev )
 	return b2Body_GetContactCapacity( B2xBody( index1, rev ) );
 }
 
-B2X_API void b2x_Body_ComputeAABB( int32_t index1, int32_t rev, float* out )
+B2X_API void b2x_Body_ComputeBounds( int32_t index1, int32_t rev, float* out )
 {
-	b2AABB a = b2Body_ComputeAABB( B2xBody( index1, rev ) );
+	b2AABB a = b2Body_ComputeBounds( B2xBody( index1, rev ) );
 	out[0] = a.lowerBound.x;
 	out[1] = a.lowerBound.y;
 	out[2] = a.upperBound.x;
 	out[3] = a.upperBound.y;
+}
+
+B2X_API float b2x_Body_GetMinExtent( int32_t index1, int32_t rev )
+{
+	return b2Body_GetMinExtent( B2xBody( index1, rev ) );
+}
+
+B2X_API float b2x_Body_GetMaxExtent( int32_t index1, int32_t rev )
+{
+	return b2Body_GetMaxExtent( B2xBody( index1, rev ) );
+}
+
+B2X_API float b2x_Body_GetMaxExtentFromOrigin( int32_t index1, int32_t rev )
+{
+	return b2Body_GetMaxExtentFromOrigin( B2xBody( index1, rev ) );
 }
 

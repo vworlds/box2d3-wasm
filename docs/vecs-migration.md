@@ -77,7 +77,7 @@ worlds, step 3 for event-heavy games, step 5 for force-driven ones.
 | 2,000 awake bodies at rest | 6,601 → 295 (**22.4×**) | 32.1× |
 
 These numbers were measured before this repository was restructured, with the benchmarks that
-are no longer kept here; the simulation results they ran on are the ones `npm run test:stock`
+are no longer kept here; the simulation results they ran on are the ones `npm run test:stock` (now `test:reference`)
 checks.
 
 ## Notes for the vecs change

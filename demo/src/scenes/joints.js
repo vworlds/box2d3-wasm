@@ -65,7 +65,7 @@ export default {
     const x = this.car.x;
     if ((x > -9 && this.dir === 1) || (x < -28 && this.dir === -1)) {
       this.dir = -this.dir;
-      for (const j of this.wheelJoints) ctx.b2.b2WheelJoint_SetMotorSpeed(j, -10 * this.dir);
+      for (const j of this.wheelJoints) ctx.b2.b2WheelJoint_SetTargetMotorSpeed(j, -10 * this.dir);
     }
   },
   onClick(ctx, x, y) {

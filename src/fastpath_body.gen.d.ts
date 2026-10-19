@@ -26,7 +26,7 @@ export interface FastPathBodyExports {
   _b2x_Body_GetAngularVelocity(index1: number, rev: number): number;
   _b2x_Body_SetLinearVelocity(index1: number, rev: number, linearVelocityX: number, linearVelocityY: number): void;
   _b2x_Body_SetAngularVelocity(index1: number, rev: number, angularVelocity: number): void;
-  _b2x_Body_SetTargetTransform(index1: number, rev: number, targetPx: number, targetPy: number, targetQc: number, targetQs: number, timeStep: number): void;
+  _b2x_Body_SetTargetTransform(index1: number, rev: number, targetPx: number, targetPy: number, targetQc: number, targetQs: number, timeStep: number, wake: number): void;
   /** out: x, y */
   _b2x_Body_GetLocalPointVelocity(index1: number, rev: number, localPointX: number, localPointY: number, outPtr: number): void;
   /** out: x, y */
@@ -34,19 +34,20 @@ export interface FastPathBodyExports {
   _b2x_Body_ApplyForce(index1: number, rev: number, forceX: number, forceY: number, pointX: number, pointY: number, wake: number): void;
   _b2x_Body_ApplyForceToCenter(index1: number, rev: number, forceX: number, forceY: number, wake: number): void;
   _b2x_Body_ApplyTorque(index1: number, rev: number, torque: number, wake: number): void;
+  _b2x_Body_ClearForces(index1: number, rev: number): void;
   _b2x_Body_ApplyLinearImpulse(index1: number, rev: number, impulseX: number, impulseY: number, pointX: number, pointY: number, wake: number): void;
   _b2x_Body_ApplyLinearImpulseToCenter(index1: number, rev: number, impulseX: number, impulseY: number, wake: number): void;
   _b2x_Body_ApplyAngularImpulse(index1: number, rev: number, impulse: number, wake: number): void;
   _b2x_Body_GetMass(index1: number, rev: number): number;
   _b2x_Body_GetRotationalInertia(index1: number, rev: number): number;
   /** out: x, y */
-  _b2x_Body_GetLocalCenterOfMass(index1: number, rev: number, outPtr: number): void;
+  _b2x_Body_GetLocalCenter(index1: number, rev: number, outPtr: number): void;
   /** out: x, y */
-  _b2x_Body_GetWorldCenterOfMass(index1: number, rev: number, outPtr: number): void;
+  _b2x_Body_GetWorldCenter(index1: number, rev: number, outPtr: number): void;
   _b2x_Body_SetMassData(index1: number, rev: number, massDataMass: number, massDataCenterX: number, massDataCenterY: number, massDataRotationalInertia: number): void;
   /** out: mass, centerX, centerY, rotationalInertia */
   _b2x_Body_GetMassData(index1: number, rev: number, outPtr: number): void;
-  _b2x_Body_ApplyMassFromShapes(index1: number, rev: number): void;
+  _b2x_Body_UpdateMassFromShapes(index1: number, rev: number): void;
   _b2x_Body_SetLinearDamping(index1: number, rev: number, linearDamping: number): void;
   _b2x_Body_GetLinearDamping(index1: number, rev: number): number;
   _b2x_Body_SetAngularDamping(index1: number, rev: number, angularDamping: number): void;
@@ -57,11 +58,13 @@ export interface FastPathBodyExports {
   _b2x_Body_IsAwake(index1: number, rev: number): number;
   _b2x_Body_SetAwake(index1: number, rev: number, awake: number): void;
   _b2x_Body_WakeTouching(index1: number, rev: number): void;
-  _b2x_Body_EnableSleep(index1: number, rev: number, enableSleep: number): void;
+  _b2x_Body_EnableSleeping(index1: number, rev: number, enableSleep: number): void;
   /** 1 or 0 */
-  _b2x_Body_IsSleepEnabled(index1: number, rev: number): number;
+  _b2x_Body_IsSleepingEnabled(index1: number, rev: number): number;
   _b2x_Body_SetSleepThreshold(index1: number, rev: number, sleepThreshold: number): void;
   _b2x_Body_GetSleepThreshold(index1: number, rev: number): number;
+  _b2x_Body_SetSafetyFactor(index1: number, rev: number, safetyFactor: number): void;
+  _b2x_Body_GetSafetyFactor(index1: number, rev: number): number;
   /** 1 or 0 */
   _b2x_Body_IsEnabled(index1: number, rev: number): number;
   _b2x_Body_Disable(index1: number, rev: number): void;
@@ -72,6 +75,9 @@ export interface FastPathBodyExports {
   _b2x_Body_SetBullet(index1: number, rev: number, flag: number): void;
   /** 1 or 0 */
   _b2x_Body_IsBullet(index1: number, rev: number): number;
+  _b2x_Body_EnableContactRecycling(index1: number, rev: number, flag: number): void;
+  /** 1 or 0 */
+  _b2x_Body_IsContactRecyclingEnabled(index1: number, rev: number): number;
   _b2x_Body_EnableContactEvents(index1: number, rev: number, flag: number): void;
   _b2x_Body_EnableHitEvents(index1: number, rev: number, flag: number): void;
   /** packed world id */
@@ -84,7 +90,10 @@ export interface FastPathBodyExports {
   _b2x_Body_GetJoints(index1: number, rev: number, jointArrayPtr: number, capacity: number): number;
   _b2x_Body_GetContactCapacity(index1: number, rev: number): number;
   /** out: lowerX, lowerY, upperX, upperY */
-  _b2x_Body_ComputeAABB(index1: number, rev: number, outPtr: number): void;
+  _b2x_Body_ComputeBounds(index1: number, rev: number, outPtr: number): void;
+  _b2x_Body_GetMinExtent(index1: number, rev: number): number;
+  _b2x_Body_GetMaxExtent(index1: number, rev: number): number;
+  _b2x_Body_GetMaxExtentFromOrigin(index1: number, rev: number): number;
 }
 
 /** Box2D b2Body_* functions without a generated wrapper: GetContactData, GetName, GetUserData, SetName, SetUserData. */

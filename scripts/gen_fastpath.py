@@ -35,6 +35,13 @@ PARAM_TYPES = {
         [("Px", "float"), ("Py", "float"), ("Qc", "float"), ("Qs", "float")],
         "b2Transform{{ b2Vec2{{ {n}Px, {n}Py }}, b2Rot{{ {n}Qc, {n}Qs }} }}",
     ),
+    # Box2D 3.2 world-space types. This package builds Box2D in single precision (no
+    # BOX2D_DOUBLE_PRECISION), where b2Pos is b2Vec2 and b2WorldTransform is b2Transform.
+    "b2Pos": ([("X", "float"), ("Y", "float")], "b2Pos{{ {n}X, {n}Y }}"),
+    "b2WorldTransform": (
+        [("Px", "float"), ("Py", "float"), ("Qc", "float"), ("Qs", "float")],
+        "b2WorldTransform{{ b2Pos{{ {n}Px, {n}Py }}, b2Rot{{ {n}Qc, {n}Qs }} }}",
+    ),
     "b2MassData": (
         [("Mass", "float"), ("CenterX", "float"), ("CenterY", "float"), ("RotationalInertia", "float")],
         "b2MassData{{ {n}Mass, b2Vec2{{ {n}CenterX, {n}CenterY }}, {n}RotationalInertia }}",
@@ -69,6 +76,13 @@ RETURN_TYPES = {
     "b2Transform": (
         "void",
         "b2Transform t = {call};\n\tout[0] = t.p.x;\n\tout[1] = t.p.y;\n\tout[2] = t.q.c;\n\tout[3] = t.q.s;",
+        4,
+        "out: px, py, qc, qs",
+    ),
+    "b2Pos": ("void", "b2Pos v = {call};\n\tout[0] = v.x;\n\tout[1] = v.y;", 2, "out: x, y"),
+    "b2WorldTransform": (
+        "void",
+        "b2WorldTransform t = {call};\n\tout[0] = t.p.x;\n\tout[1] = t.p.y;\n\tout[2] = t.q.c;\n\tout[3] = t.q.s;",
         4,
         "out: px, py, qc, qs",
     ),

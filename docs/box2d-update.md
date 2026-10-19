@@ -1,7 +1,8 @@
 # Updating Box2D
 
-What to consider when moving the `box2d` submodule (currently `3a4f0da`, v3.1.1 plus 18 commits)
-to a newer Box2D.
+What to consider when moving the `box2d` submodule (currently v3.2.0, `178495b`) to a newer Box2D.
+The last move, from `3a4f0da` (v3.1.1 plus 18 commits) to v3.2.0, is written up for users in
+[box2d-3.2-migration.md](box2d-3.2-migration.md); the notes marked *(3.2)* below are what it taught.
 
 ## 1. It is a release of its own
 
@@ -14,22 +15,28 @@ So:
   (emsdk 4.0.18) and the compiler flags in `scripts/build.sh` stay as they are.
 - Do the update on its own branch, in the order below.
 
-## 2. `npm run test:stock` stops being valid
+## 2. Record the reference before and after
 
-`tests/stock-differential/` compares against `box2d3-wasm@5.2.0`, which contains the old Box2D. After
-the update it fails, and it should. Do not weaken it. Replace it:
+`npm run test:reference` (`tests/reference-differential/`) compares every step of seven scenes with
+the hashes recorded for the pinned Box2D. After the update it fails, and it should. Do not weaken
+it:
 
-1. Before the update, with the last release built from the old pin, run the scenes of
-   `tests/stock-differential/diff.mjs` (embind and fast, both flavours) and record the per-scene
-   `sha` and per-step hashes from the output JSON as reference hashes in the repository.
-2. After the update, the same test compares against those recorded hashes instead of the stock
-   package, and is expected to differ. Review what changed with the Box2D release notes; do not
-   accept new hashes blindly.
-3. Drop the `box2d3-wasm` devDependency, and say in `tests/stock-differential/README.md` what the
-   hashes were recorded from.
+1. Before moving the submodule, build the old pin and keep a copy of `dist/` (for the benchmark
+   below). Its reference is already in `tests/reference-differential/reference/`.
+2. After the update, run `diff.mjs` on the new build for all four runs (deluxe/compat ×
+   embind/fast), check that the four agree with each other, review the change with the Box2D
+   release notes, and save one of them as `reference/box2d-<new pin>.json` (same shape as the
+   existing files: `box2d.commit`, `box2d.tag`, `recordedFrom`, `scenes`). Point `CURRENT` in
+   `run.mjs` at it and `PREVIOUS` at the old one, and add a row to the table in the test's
+   README.
+3. Look at the scene statistics as well as the hashes: *(3.2)* the `pile` scene stopped reaching
+   zero awake bodies, which turned out to be later settling, not broken sleep. Check such things
+   with a small probe before accepting them.
 
-The checks that stay valid are the ones between this package's own paths: the embind and fast
-path hashes must still be identical to each other (`npm test` and the `fast` runs).
+The checks that stay valid throughout are the ones between this package's own paths: embind and
+fast path, deluxe and compat must give identical hashes (`npm test` and the `fast` runs).
+
+Compare speed too: `node bench/engine.mjs <old dist> <new dist>`.
 
 ## 3. The timer patch
 
@@ -51,6 +58,8 @@ If it applies, the build applies it for you. If it does not, re-create it: resto
 functions' early return and the switch as above, `git -C box2d diff > ...`, and keep it small.
 Also check that the timers still only feed `world->profile` and the `B2_SNOOP_TOI_COUNTERS`
 statistics (search for `b2GetTicks`, `b2GetMilliseconds`, `b2GetMillisecondsAndReset` call sites).
+*(3.2)* `scheduler.c` also uses them for a spin timeout; harmless only because the internal
+scheduler never runs here (see threading below).
 If Box2D starts using them for anything that affects the simulation (for example adaptive time
 budgets), the switch is no longer harmless and the patch has to go or change.
 
@@ -68,6 +77,8 @@ change the wrapper. The script prints a skipped list (today `SetName`, `GetName`
 `GetUserData`, `GetContactData`: names, `void*` user data and contact data cannot be expressed as
 numbers). An argument type the script does not know makes it skip that function and list it; add
 support for the type, or leave it skipped on purpose. `npm run gen:check` must pass afterwards.
+*(3.2)* New typedefs (`b2Pos`, `b2WorldTransform`) silently drop every function that uses them
+until `PARAM_TYPES` / `RETURN_TYPES` know them, so compare the wrapper count before and after.
 
 ## 5. The hand-written fast path
 
@@ -93,7 +104,20 @@ support for the type, or leave it skipped on purpose. `npm run gen:check` must p
 
 New, removed or changed C functions and struct fields need `src/glue.cpp` updated, by hand: the
 binding list is explicit. Compile errors show removed or renamed symbols, but a new function or a
-new field is silently absent until you add it. Diff `box2d.h`, `types.h`, `collision.h`,
+new field is silently absent until you add it, and a function bound as `&b2Foo` silently takes
+its new arity: *(3.2)* `b2DestroyJoint` lost an argument and `b2World_CastMover` gained one with
+no compile error. Diff every `B2_API` signature between the pins (the parameter types, not just
+the names), and check:
+
+- array sizes the glue hardcodes (*(3.2)* `b2Counters.colorCounts` grew from 12 to 24);
+- enum order (*(3.2)* `b2JointType` was reordered);
+- defaults that turn into required fields (*(3.2)* an open `b2ChainDef` without `ghost1`/`ghost2`
+  is rejected with only a log line);
+- threading: this build has no threads. *(3.2)* `workerCount > 1` started Box2D's own scheduler,
+  so `b2CreateWorld` forces it to 1 and `b2World_SetWorkerCount` is excepted.
+
+`B2_FORCE_INLINE` (*(3.2)*) is a new declaration macro; `check_bindings.py` reads it with
+`B2_INLINE`. Diff `box2d.h`, `types.h`, `collision.h`,
 `math_functions.h` and `id.h` between the old and new pin and walk the result. Then regenerate the
 public surface and compare (see below), and update `src/Box2D.template.d.ts` only if the factory
 signature changed.
@@ -131,9 +155,12 @@ The vecs physics tests depend on exact results. After a Box2D update:
 - The dead-reckoning and motion-accuracy tests (`motion_accuracy.test.ts` in
   `@vworlds/vecs-phaser-server`, and the physics tests that compare poses) can fail or need new
   tolerances.
-- The pinned checksums in vecs's `bench/physics-pose-out.ts` encode exact results and must be
-  regenerated against the new build, with unmodified vecs first (so the change is attributed to
-  Box2D, not to anything else), then reviewed. Do not just paste the new values in.
+- The checksums printed by vecs's `bench/physics-pose-out.ts` encode exact results: compare them
+  against unmodified vecs on the old build first (so a change is attributed to Box2D, not to
+  anything else), then review. *(3.2)* They did not change (that scene has no contacts).
+- Space Rocks (`~/src/spacerocks`) uses vecs-physics: run its server suite with the new
+  vecs-physics build and this package swapped into its `node_modules`. Its trains, snapping and
+  sector-crossing tests record measured physics and are the first to move.
 - Run vecs's suites (`@vworlds/vecs-physics`, `@vworlds/vecs-phaser-server`, `@vworlds/vecs-phaser`
   and `test:stress`) against the packed tarball (`npm pack`) before releasing.
 

@@ -4,7 +4,7 @@
 
 Merging `dev` into `master` runs `.github/workflows/publish.yml`:
 
-1. build both flavours, run `gen:check`, `check:bindings`, `test:release`, `npm test`, `npm run test:stock` and the
+1. build both flavours, run `gen:check`, `check:bindings`, `test:release`, `npm test`, `npm run test:reference` and the
    pack content check (the vecs suites do not run here; they are in CI and the nightly run);
 2. `scripts/release-version.mjs` asks the npm registry whether the version in `package.json`
    exists. If not, that version is released as is. If it does, the patch version is bumped;

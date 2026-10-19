@@ -1,8 +1,8 @@
 diff --git a/src/timer.c b/src/timer.c
-index 7e2e87c..74ae1f0 100644
+index fff118c..a3bdbc9 100644
 --- a/src/timer.c
 +++ b/src/timer.c
-@@ -101,8 +101,32 @@ void b2UnlockMutex( b2Mutex* m )
+@@ -250,8 +250,32 @@ void b2JoinThread( b2Thread* t )
  #include <sched.h>
  #include <time.h>
  
@@ -35,7 +35,7 @@ index 7e2e87c..74ae1f0 100644
  	struct timespec ts;
  	clock_gettime( CLOCK_MONOTONIC, &ts );
  	return ts.tv_sec * 1000000000LL + ts.tv_nsec;
-@@ -110,12 +134,21 @@ uint64_t b2GetTicks( void )
+@@ -259,12 +283,21 @@ uint64_t b2GetTicks( void )
  
  float b2GetMilliseconds( uint64_t ticks )
  {

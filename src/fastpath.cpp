@@ -20,8 +20,14 @@
 
 #define B2X_API extern "C" EMSCRIPTEN_KEEPALIVE
 
+// The fast path passes positions as f32 pairs, so it needs Box2D's single-precision build, where
+// b2Pos is b2Vec2 and b2WorldTransform is b2Transform.
+#ifdef BOX2D_DOUBLE_PRECISION
+#error "the b2x fast path requires Box2D built without BOX2D_DOUBLE_PRECISION"
+#endif
+
 // Bumped whenever an exported signature or record layout changes.
-#define B2X_VERSION 1
+#define B2X_VERSION 2
 
 namespace {
 
@@ -79,7 +85,7 @@ typedef struct b2xMotion
 	float w;			  // b2Body_GetAngularVelocity
 	float linearDamping;  // b2Body_GetLinearDamping
 	float angularDamping; // b2Body_GetAngularDamping
-	float localCenterX;	  // b2Body_GetLocalCenterOfMass
+	float localCenterX;	  // b2Body_GetLocalCenter
 	float localCenterY;
 	float mass;			  // b2Body_GetMass
 	float gravityScale;	  // b2Body_GetGravityScale
@@ -259,6 +265,7 @@ static void BuildLayout()
 	B2X_FIELD( b2ContactHitEvent, normalX, normal.x );
 	B2X_FIELD( b2ContactHitEvent, normalY, normal.y );
 	B2X_FIELD( b2ContactHitEvent, approachSpeed, approachSpeed );
+	B2X_FIELD( b2ContactHitEvent, contact, contactId.index1 );
 
 	B2X_STRUCT( sensorBegin, b2SensorBeginTouchEvent );
 	B2X_SHAPE_ID_FIELDS( b2SensorBeginTouchEvent, sensorShape, sensorShapeId );
@@ -468,7 +475,7 @@ B2X_API void b2x_Body_GetMotion( int32_t index1, int32_t rev, b2xMotion* out )
 	out->w = b2Body_GetAngularVelocity( id );
 	out->linearDamping = b2Body_GetLinearDamping( id );
 	out->angularDamping = b2Body_GetAngularDamping( id );
-	b2Vec2 center = b2Body_GetLocalCenterOfMass( id );
+	b2Vec2 center = b2Body_GetLocalCenter( id );
 	out->localCenterX = center.x;
 	out->localCenterY = center.y;
 	out->mass = b2Body_GetMass( id );

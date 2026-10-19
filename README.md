@@ -8,9 +8,10 @@ with two ways to call it:
 - a zero-allocation **fast path** (`b2x_*` raw exports and a small helper, `@vworlds/box2d3-wasm/fastpath`)
   that skips embind's marshalling for the calls a game makes every frame.
 
-Both run the same Box2D code. Results are bit-identical to
-[`box2d3-wasm` 5.2.0](https://www.npmjs.com/package/box2d3-wasm) in every scene of
-`npm run test:stock`.
+Both run the same Box2D code, [v3.2.0](https://github.com/erincatto/box2d/releases/tag/v3.2.0)
+since 7.0.0, and give bit-identical results: `npm run test:reference` checks every step of seven
+scenes, through both APIs and both flavours, against hashes recorded for the pinned Box2D.
+Coming from 6.x (Box2D 3.1.1+): [docs/box2d-3.2-migration.md](docs/box2d-3.2-migration.md).
 
 ## Origin
 
@@ -24,8 +25,10 @@ What differs from upstream 5.2.0:
 - **Flat C API only.** The object-oriented classes (`World`, `Body`, `Shape`, the joint classes, ...)
   are gone, and so is the box2cpp submodule.
 - **No threading.** No `TaskSystem`, no `b2CreateThreadedWorld`, no pthread build, no
-  `SharedArrayBuffer` requirement. Memory is not shared.
+  `SharedArrayBuffer` requirement. Memory is not shared. `b2CreateWorld` forces `workerCount` to 1
+  (Box2D 3.2 would otherwise start its own thread pool).
 - **No debug draw.** No `b2DebugDraw`, `b2World_Draw` or the `./utils/*` export.
+- **Box2D v3.2.0** since 7.0.0 (upstream 5.2.0 ships v3.1.1 plus 18 commits).
 - **The fast path** (below), plus a small patch to Box2D (`patches/box2d/`) that adds a runtime switch
   for its profile timers.
 
@@ -138,7 +141,7 @@ The full reference (exports, memory-growth rule, layouts, events, profile timers
 | `compat` | `BOX2D_DISABLE_SIMD=ON` | otherwise |
 
 `dist/entry.mjs` (the `"."` export) checks `WebAssembly.validate` on a tiny SIMD module and
-imports one of them. In the scenes of `npm run test:stock` both flavours produce the same hashes.
+imports one of them. In the scenes of `npm run test:reference` both flavours produce the same hashes.
 Both carry the fast path, and `@vworlds/box2d3-wasm/fastpath` works with either.
 
 ## Build
@@ -174,9 +177,8 @@ the same commit built at two different paths gives byte-identical files in `dist
 ## Test
 
 ```sh
-npm install        # once; fetches box2d3-wasm 5.2.0 for test:stock
 npm test           # fast-path differential test + bindings test (both flavours) + integration test, on dist/
-npm run test:stock # step-by-step hashes equal to box2d3-wasm 5.2.0, embind and fast path
+npm run test:reference # step-by-step hashes equal to the recorded reference for the pinned Box2D, embind and fast path
 npm run gen:check  # the generated fast-path code is current
 npm run check:bindings  # every C function is bound or excepted (see API coverage)
 npm run test:release    # the release-version script (scripts/release-version.test.mjs)
@@ -186,6 +188,28 @@ npm run check:pack      # npm pack would publish only the expected files (needs 
 `npm run gen` regenerates `src/fastpath_body.gen.cpp` and `src/fastpath_body.gen.d.ts` from
 `box2d/include/box2d/box2d.h`.
 
+## Benchmark
+
+```sh
+npm run bench                              # dist/, both flavours
+node bench/engine.mjs <distA> <distB>      # compare two builds (each a dist/ directory)
+```
+
+`bench/engine.mjs` times `b2World_Step` (1/60 s, 4 sub-steps) on five scenes modelled on Box2D's
+own benchmark suite: `large_pyramid` (5050 boxes), `many_pyramids` (5500 boxes in 100 islands),
+`joint_grid` (3600 bodies, ~7000 revolute joints), `tumbler` (2025 boxes in a motorised drum) and
+`sparse_movers` (2000 bodies that never touch). Each measurement is a fresh process and builds
+alternate within a round; it prints the median ms per step. Box2D 3.2 against the previous pin
+(3.1.1+18), Node 24, x86-64, ms per step:
+
+| scene | deluxe 3.1.1+ | deluxe 3.2.0 | compat 3.1.1+ | compat 3.2.0 |
+|---|---|---|---|---|
+| large_pyramid | 4.24 | 2.09 (0.49×) | 7.56 | 4.63 (0.61×) |
+| many_pyramids | 4.06 | 1.87 (0.46×) | 7.37 | 4.18 (0.57×) |
+| joint_grid | 1.81 | 1.59 (0.88×) | 1.82 | 1.65 (0.91×) |
+| tumbler | 3.21 | 1.38 (0.43×) | 4.80 | 2.76 (0.57×) |
+| sparse_movers | 0.156 | 0.148 (0.95×) | 0.158 | 0.157 (0.99×) |
+
 ## API coverage
 
 Rule: **every function of Box2D's public C API (the `B2_API` declarations in `box2d.h`, `types.h`,
@@ -194,16 +218,18 @@ name, except the ones listed with a reason in
 [scripts/bindings-exceptions.txt](scripts/bindings-exceptions.txt). The fast path is an optional
 shortcut to some of them and does not count towards the rule.
 
-Today that is 397 of 428 declared functions bound; the 31 exceptions are:
+Today that is 443 of 506 declared functions bound; the 63 exceptions are:
 
 - debug draw (`b2World_Draw`, `b2DefaultDebugDraw`), removed on purpose;
-- allocator and assert hooks (`b2SetAllocator`, `b2SetAssertFcn`, `b2InternalAssertFcn`), which take
-  C function pointers;
+- allocator, assert and log hooks (`b2SetAllocator`, `b2SetAssertCallback`, `b2SetLogCallback`,
+  `b2InternalAssert`), which take C function pointers;
+- `b2World_SetWorkerCount` (this build has no threads);
 - `b2GetMillisecondsAndReset` (in/out `uint64_t*`; use `b2GetTicks` and `b2GetMilliseconds`),
-  `b2ShapeDistance` (needs the `b2DistanceInput`/`b2DistanceOutput`/`b2Simplex` value classes);
-- the 22 `b2DynamicTree_*` functions (a standalone broadphase tree with raw pointers and callbacks);
-- `b2World_DumpMemoryStats` (writes a file; the build has no file system, so the call throws);
-- `b2Chain_GetSurfaceMaterialCount` (declared in `box2d.h` but not defined in the pinned Box2D).
+  `b2ComputeShapeDistance` (needs the `b2DistanceInput`/`b2DistanceOutput`/`b2Simplex` value classes);
+- the 31 recording and replay functions and the 3 world snapshot functions (new in Box2D 3.2:
+  byte buffers, files and raw handles; not bound yet);
+- the 19 standalone dynamic tree functions (raw pointers and callbacks);
+- `b2World_DumpMemoryStats` (writes a file; the build has no file system, so the call throws).
 
 Conventions for the awkward ones:
 
@@ -211,7 +237,7 @@ Conventions for the awkward ones:
   32-bit **integer** stored in the `void*`, not an object. It is the same storage as
   `_b2x_Body_SetUserData` / `_b2x_Shape_SetUserData`, so both APIs see the same value; keep your own
   table if you need to attach objects.
-- **Names**: `b2Body_SetName(id, string)` / `b2Body_GetName(id)` (Box2D keeps at most 31 characters).
+- **Names**: `b2Body_SetName(id, string)` / `b2Body_GetName(id)` (Box2D 3.2 keeps at most 10 characters, `B2_NAME_LENGTH`).
 - **Out-parameters** come back as value objects: `b2Joint_GetConstraintTuning(id)` returns
   `{hertz, dampingRatio}`, `b2DistanceJoint_GetSpringForceRange(id)` returns
   `{lowerForce, upperForce}`.
@@ -252,7 +278,7 @@ The demo is not part of the published package (it has its own `package.json`). C
 ## CI
 
 `.github/workflows/ci.yml` runs on pull requests to `dev` and `master` and on pushes to `dev`. It
-builds both flavours once, then runs `gen:check`, `check:bindings`, `test:release`, `npm test`, `npm run test:stock`,
+builds both flavours once, then runs `gen:check`, `check:bindings`, `test:release`, `npm test`, `npm run test:reference`,
 a check of the `npm pack` content, the demo build and the vecs test suites (physics, phaser-server,
 phaser) against the vecs commit pinned in `ci/vecs-ref`. The vecs repository is private: the suites
 need the `VECS_READ_SECRET` secret and are skipped, with a warning, when it is missing.
@@ -282,19 +308,21 @@ GitHub Pages on the same push. [docs/releasing.md](docs/releasing.md) lists the 
 | `.github/`, `ci/` | workflows, the build action, `vecs-ref` (the pinned vecs commit) |
 | `patches/box2d/` | the patch applied to the Box2D submodule |
 | `box2d/` | Box2D (git submodule) |
-| `tests/` | `fastpath-differential.mjs`, `bindings.mjs`, `integration.mjs`, `stock-differential/` |
+| `tests/` | `fastpath-differential.mjs`, `bindings.mjs`, `integration.mjs`, `reference-differential/` |
+| `bench/` | `engine.mjs` (engine benchmark, compares builds) |
 | `demo/` | the Phaser 4 demo site (own `package.json`, not published) |
-| `docs/` | [fastpath.md](docs/fastpath.md), [vecs-migration.md](docs/vecs-migration.md), [box2d-update.md](docs/box2d-update.md) |
+| `docs/` | [fastpath.md](docs/fastpath.md), [box2d-3.2-migration.md](docs/box2d-3.2-migration.md), [vecs-migration.md](docs/vecs-migration.md), [box2d-update.md](docs/box2d-update.md) |
 | `dist/`, `build/` | build output (not committed) |
 
 ## Documentation
 
 - [docs/fastpath.md](docs/fastpath.md): the fast-path API.
+- [docs/box2d-3.2-migration.md](docs/box2d-3.2-migration.md): moving from 6.x to 7.0.0 (Box2D 3.2).
 - [docs/vecs-migration.md](docs/vecs-migration.md): moving vecs-physics from embind to the fast path.
 - [docs/box2d-update.md](docs/box2d-update.md): what to do when moving the Box2D submodule.
 - [docs/releasing.md](docs/releasing.md): releases, CI secrets and the one-time repository setup.
 - [patches/README.md](patches/README.md): the Box2D patch.
-- [tests/stock-differential/README.md](tests/stock-differential/README.md): what the stock comparison proves.
+- [tests/reference-differential/README.md](tests/reference-differential/README.md): what the reference comparison proves.
 
 ## Licence
 

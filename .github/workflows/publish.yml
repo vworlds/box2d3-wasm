@@ -54,8 +54,8 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: Tests against stock box2d3-wasm
-        run: npm run test:stock
+      - name: Simulation hashes against the recorded reference
+        run: npm run test:reference
 
       - name: Package content
         run: npm run check:pack
